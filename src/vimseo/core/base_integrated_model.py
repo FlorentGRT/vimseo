@@ -62,6 +62,8 @@ from vimseo.storage_management import NAME_TO_ARCHIVE_CLASS
 from vimseo.storage_management.scratch_storage import DirectoryScratch
 from vimseo.utilities.json_grammar_utils import load_input_bounds
 from vimseo.utilities.plotting_utils import plot_curves
+from vimseo.lib_vimseo.solver_utilities import time_stamper_formatted
+
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -438,14 +440,14 @@ class IntegratedModel(GemseoDisciplineWrapper):
         if self._whether_use_scratch_dir():
             self._scratch_manager.create_job_directory()
             LOGGER.info(
-                f"Current root directory of scratch directory is "
-                f"{self._scratch_manager.root_directory}."
+                f"Current scratch directory is "
+                f"{self._scratch_manager._job_directory}."
             )
 
         self._archive_manager.create_job_directory()
         LOGGER.info(
-            f"Current root directory of job directory is "
-            f"{self._archive_manager.root_directory}."
+            f"Current archive directory is "
+            f"{self._archive_manager._job_directory}."
         )
 
         for discipline in self._chain.disciplines:
@@ -773,7 +775,7 @@ class IntegratedModel(GemseoDisciplineWrapper):
         cache_dir_path = Path(self._cache_file_path).parent
         self._cache_file_path = Path(
             cache_dir_path
-            / f"{self.__class__.__name__}_{self.__load_case.name}_from_archive.hdf"
+            / f"{self.__class__.__name__}_{self.__load_case.name}_from_archive_{time_stamper_formatted()}.hdf"
         )
         self._cache_file_path.unlink(
             missing_ok=True
