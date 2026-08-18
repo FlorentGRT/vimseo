@@ -13,13 +13,32 @@
 # along with this program; if not, write to the Free Software Foundation,
 # Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+"""Tests for PostProcessor.
+
+The check of the output keys against the output grammar uses a minimal fake
+post-processor.
+
+PostProcessor.POSTPROCESS_DESPITE_FAULTY_RUN / _can_postprocess(), and the resulting
+_generate_nan_outputs()/_generate_failed_output_data() behavior, are exercised
+end-to-end through the MockFaultyRunPost mock model rather than by calling the
+private methods directly.
+"""
+
 from __future__ import annotations
 
+import numpy as np
 import pytest
 from gemseo.core.grammars.errors import InvalidDataError
 from numpy import array
+from numpy import atleast_1d
 
+from vimseo.api import create_model
 from vimseo.core.components.post.post_processor import PostProcessor
+from vimseo.core.model_metadata import MetaDataNames
+from vimseo.utilities.test_utils import check_model_outputs
+
+MODEL_NAME = "MockFaultyRunPost"
+LOAD_CASE_NAME = "LC1"
 
 
 class _FakePostProcessor(PostProcessor):
@@ -66,3 +85,72 @@ def test_execute_ignores_extra_output_without_check_subprocess(tmp_wd):
     data = post.execute()
     assert data["y1"] == pytest.approx(1.0)
     assert "extra_junk" not in data
+
+
+def test_successful_run_postprocesses_normally(tmp_wd):
+    """With a successful run, all outputs are computed normally."""
+    model = check_model_outputs(
+        MODEL_NAME,
+        LOAD_CASE_NAME,
+        input_data={"x1": atleast_1d(3.0), "run_succeeds": atleast_1d(True)},
+        expected_outputs={"y1": atleast_1d(6.0), "y2": atleast_1d(9.0)},
+        relative_tolerance=1e-6,
+    )
+    assert model.get_output_data()[MetaDataNames.error_code][0] == 0
+
+
+def test_faulty_run_without_opt_in_returns_nan_outputs(tmp_wd):
+    """By default (``POSTPROCESS_DESPITE_FAULTY_RUN=False``), a faulty run falls
+    back to NaN outputs without attempting to postprocess, even though the job
+    directory actually holds a usable result file."""
+    model = create_model(MODEL_NAME, LOAD_CASE_NAME)
+    model.execute({
+        "x1": atleast_1d(3.0),
+        "run_succeeds": atleast_1d(False),
+        "result_file_written": atleast_1d(True),
+    })
+
+    output_data = model.get_output_data()
+    assert output_data[MetaDataNames.error_code][0] == 1
+    assert np.isnan(output_data["y1"]).all()
+    assert np.isnan(output_data["y2"]).all()
+
+
+def test_faulty_run_with_opt_in_recovers_available_outputs(tmp_wd):
+    """With ``POSTPROCESS_DESPITE_FAULTY_RUN=True`` and a usable job directory
+    (``_can_postprocess()`` returns True), postprocessing is attempted: outputs
+    that can be recovered are kept, others fall back to NaN via
+    ``_generate_nan_outputs(existing_data=...)``, and the run is not reported as
+    an error."""
+    model = create_model(MODEL_NAME, LOAD_CASE_NAME)
+    model._chain.disciplines[0].POSTPROCESS_DESPITE_FAULTY_RUN = True
+    model.execute({
+        "x1": atleast_1d(3.0),
+        "run_succeeds": atleast_1d(False),
+        "result_file_written": atleast_1d(True),
+    })
+
+    output_data = model.get_output_data()
+    assert output_data[MetaDataNames.error_code][0] == 0
+    assert output_data["y1"][0] == pytest.approx(6.0)
+    assert np.isnan(output_data["y2"]).all()
+
+
+def test_faulty_run_with_opt_in_but_unusable_job_directory_returns_nan_outputs(
+    tmp_wd,
+):
+    """With ``POSTPROCESS_DESPITE_FAULTY_RUN=True`` but no usable job directory
+    (``_can_postprocess()`` returns False), postprocessing still falls back to
+    NaN outputs, via ``_generate_failed_output_data()``."""
+    model = create_model(MODEL_NAME, LOAD_CASE_NAME)
+    model._chain.disciplines[0].POSTPROCESS_DESPITE_FAULTY_RUN = True
+    model.execute({
+        "x1": atleast_1d(3.0),
+        "run_succeeds": atleast_1d(False),
+        "result_file_written": atleast_1d(False),
+    })
+
+    output_data = model.get_output_data()
+    assert output_data[MetaDataNames.error_code][0] == 1
+    assert np.isnan(output_data["y1"]).all()
+    assert np.isnan(output_data["y2"]).all()
