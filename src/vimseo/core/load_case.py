@@ -19,9 +19,9 @@ import sys
 from dataclasses import dataclass
 from dataclasses import field
 from dataclasses import fields
-from json import dumps
 from pathlib import Path
 from typing import TYPE_CHECKING
+from typing import ClassVar
 
 from docstring_inheritance import GoogleDocstringInheritanceMeta
 from gemseo.utils.string_tools import MultiLineString
@@ -30,11 +30,12 @@ from matplotlib.pyplot import imshow
 from numpy import asarray
 
 from vimseo.core.load import Load
-from vimseo.tools.post_tools.plot_parameters import PlotParameters
-from vimseo.utilities.json_grammar_utils import EnhancedJSONEncoder
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
+    from collections.abc import Sequence
+
+    from vimseo.tools.post_tools.plot_parameters import Plot
 
 
 @dataclass
@@ -53,17 +54,19 @@ class LoadCase(metaclass=GoogleDocstringInheritanceMeta):
     summary: str = ""
     """A brief description of the load case ."""
 
-    plot_parameters: PlotParameters = field(default_factory=PlotParameters)
-    """The parameters of the plot."""
+    PLOTS: ClassVar[Sequence[Plot | tuple[str, ...]]] = []
+    """The load-case-specific figures.
+
+    Each entry either overrides the model's corresponding :attr:`.IntegratedModel.PLOTS`
+    entry (same abscissa and first ordinate — see :meth:`.Plot.get_key`) or is added as
+    an extra, load-case-specific figure. See :func:`.merge_plots`.
+    """
 
     bc_variable_names: list[str] = field(default_factory=list)
     """The names of the variables defining the boundary conditions."""
 
     load: Load = field(default_factory=Load)
     """The load."""
-
-    verbose: bool = False
-    """Whether ``__str__`` includes the full plot-parameters definition."""
 
     @property
     def image_path(self):
@@ -87,21 +90,11 @@ class LoadCase(metaclass=GoogleDocstringInheritanceMeta):
         """The name of the boundary condition variables."""
         return []
 
-    def get_plot_parameters(self) -> PlotParameters:
-        return PlotParameters()
-
     def get_load(self) -> Load:
         return Load()
 
-    def _get_multiline(self, verbose: bool | None = None):
-        """A multiline representation of the load case as a ``MultiLineString``.
-
-        Args:
-            verbose: Whether to include the full plot-parameters definition.
-                If ``None``, use :attr:`.verbose`.
-        """
-        verbose = self.verbose if verbose is None else verbose
-
+    def _get_multiline(self) -> MultiLineString:
+        """A multiline representation of the load case as a ``MultiLineString``."""
         text = MultiLineString()
         text.add(f"Load case {self.name}: {self.summary}")
         if self.domain:
@@ -125,20 +118,6 @@ class LoadCase(metaclass=GoogleDocstringInheritanceMeta):
             text.add(
                 f"Boundary condition variables: {', '.join(self.bc_variable_names)}"
             )
-
-        if verbose:
-            text.add("")
-            text.add("Plot parameters:")
-            text.indent()
-            text.add(
-                dumps(
-                    self.plot_parameters,
-                    sort_keys=True,
-                    indent=4,
-                    cls=EnhancedJSONEncoder,
-                )
-            )
-            text.dedent()
 
         return text
 

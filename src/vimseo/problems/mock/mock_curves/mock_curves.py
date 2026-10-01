@@ -42,10 +42,10 @@ class MockCurvesDiscipline(Discipline):
     """A mock discipline, constituting the main component of the `MockCurves` model."""
 
     CURVE_NB_POINTS: ClassVar[int] = 100
-    """The length of the x and y curve."""
+    """The number of points of the curve."""
 
     DECREASING_AXIS: ClassVar[bool] = False
-    """Whether the abscissa of the y curve has decreasing values."""
+    """Whether the abscissa of the curve has decreasing values."""
 
     def __init__(self):
         super().__init__()
@@ -54,8 +54,8 @@ class MockCurvesDiscipline(Discipline):
             "x_1": atleast_1d(0.0),
         })
         self.output_grammar.update_from_data({
-            "y": atleast_1d(0.0),
-            "y_axis": atleast_1d(0.0),
+            "y_history": atleast_1d(0.0),
+            "x_history": atleast_1d(0.0),
         })
         self.default_input_data = {
             "x": atleast_1d(1.0),
@@ -63,19 +63,33 @@ class MockCurvesDiscipline(Discipline):
         }
 
     def _run(self, input_data):
-        y_axis = linspace(0, 1.0, self.CURVE_NB_POINTS)
-        return {"y": input_data["x"] * y_axis + input_data["x_1"], "y_axis": y_axis}
+        x_history = linspace(0, 1.0, self.CURVE_NB_POINTS)
+        return {
+            "y_history": input_data["x"] * x_history + input_data["x_1"],
+            "x_history": x_history,
+        }
 
 
 class MockCurves(BaseDisciplineModel):
     """A toy model whose outputs illustrate the definition of figures holding a single
     line."""
 
-    PLOTS: ClassVar[Sequence[tuple[str, ...]]] = [("y_axis", "y")]
+    PLOTS: ClassVar[Sequence[tuple[str, ...]]] = [("x_history", "y_history")]
 
     _DISCIPLINE: ClassVar[Discipline] = MockCurvesDiscipline()
 
     _EXPECTED_LOAD_CASE = "Dummy"
+
+
+class MockCurvesOverride(BaseDisciplineModel):
+    """A mock model whose PLOTS are partly overridden/completed by its load case."""
+
+    PLOTS: ClassVar[Sequence[Plot | tuple[str, ...]]] = [
+        ("x_history", "y_history"),  # overridden in place by DummyOverride's plot
+    ]
+
+    _DISCIPLINE: ClassVar[Discipline] = MockCurvesDiscipline()
+    _EXPECTED_LOAD_CASE = "DummyOverride"
 
 
 class MockCurvesXRangeDiscipline(Discipline):
@@ -97,28 +111,30 @@ class MockCurvesXRangeDiscipline(Discipline):
         }
 
     def _run(self, input_data):
-        y_axis = get_history(
+        x_history = get_history(
             support=linspace(
                 input_data["x_left"][0], input_data["x_right"][0], self.CURVE_NB_POINTS
             )
         )
-        y = get_history(
+        y_history = get_history(
             list_expressions=[
                 expressions_convexity["convex"],
                 expressions_oscillate["half_drop"],
             ],
-            support=y_axis,
+            support=x_history,
         )
         return {
-            "y_axis": y_axis,
-            "y": y * input_data["y_max"][0] / (np_max(y) - np_min(y)),
+            "x_history": x_history,
+            "y_history": y_history
+            * input_data["y_max"][0]
+            / (np_max(y_history) - np_min(y_history)),
             "x_left": input_data["x_left"],
             "x_right": input_data["x_right"],
         }
 
 
 class MockCurvesXRange(BaseDisciplineModel):
-    PLOTS: ClassVar[Sequence[tuple[str, ...]]] = [("y_axis", "y")]
+    PLOTS: ClassVar[Sequence[tuple[str, ...]]] = [("x_history", "y_history")]
 
     _DISCIPLINE = MockCurvesXRangeDiscipline()
     _EXPECTED_LOAD_CASE = "Dummy"
@@ -137,7 +153,7 @@ class MockMultiCurvesDiscipline(Discipline):
         super().__init__()
         self.input_grammar.update_from_data({
             "max_displacement": atleast_1d(0.0),
-            "critical_energy": atleast_1d(0.0),
+            "critical_crack_position": atleast_1d(0.0),
         })
         self.output_grammar.update_from_data({
             "displacement_history": atleast_1d(0.0),
@@ -147,11 +163,11 @@ class MockMultiCurvesDiscipline(Discipline):
             "energy_work_history": atleast_1d(0.0),
             "force_history": atleast_1d(0.0),
             "crack_position_history": atleast_1d(0.0),
-            "critical_energy": atleast_1d(0.0),
+            "critical_crack_position": atleast_1d(0.0),
         })
         self.default_input_data = {
             "max_displacement": atleast_1d(10.0),
-            "critical_energy": atleast_1d(0.5),
+            "critical_crack_position": atleast_1d(35.0),
         }
 
     def _run(self, input_data):
@@ -169,7 +185,7 @@ class MockMultiCurvesDiscipline(Discipline):
             "energy_work_history": strain + damage + viscous,
             "force_history": displacement * exp(-0.2 * displacement),
             "crack_position_history": 20.0 + 3.0 * displacement,
-            "critical_energy": input_data["critical_energy"],
+            "critical_crack_position": input_data["critical_crack_position"],
         }
 
 
@@ -183,12 +199,15 @@ class MockMultiCurves(BaseDisciplineModel):
     )
 
     PLOTS: ClassVar[Sequence[Plot | tuple[str, ...]]] = [
-        # Several ordinates sharing an axis, declared as a plain tuple.
-        (
-            "displacement_history",
-            "energy_strain_history",
-            "energy_damage_history",
-            "energy_viscous_history",
+        # Several ordinates sharing an axis.
+        Plot(
+            x="displacement_history",
+            traces=[
+                Trace("energy_strain_history"),
+                Trace("energy_damage_history"),
+                Trace("energy_viscous_history"),
+            ],
+            x_label="Displacement",
         ),
         # A styled figure with a secondary ordinate axis and a reference line.
         Plot(
@@ -206,13 +225,14 @@ class MockMultiCurves(BaseDisciplineModel):
                     style=LineStyle(color="red", dash="dash"),
                 ),
                 ConstantTrace(
-                    value="critical_energy",
-                    label="critical energy",
+                    value="critical_crack_position",
+                    label="critical crack position",
                     secondary_y=True,
                     style=LineStyle(color="black", dash="dot"),
                 ),
             ],
             title="Crack propagation",
+            x_label="Displacement",
             y_label="Force",
             y_label_secondary="Crack position",
         ),
