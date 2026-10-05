@@ -51,14 +51,6 @@ class PostProcessor(ExternalSoftwareComponent):
     _run method to be overloaded.
     """
 
-    # TODO Florent comment : @Seb del_jobdir seems deprecated
-    del_jobdir: bool
-    """Whether to delete the job directory after post-processing."""
-
-    # TODO Florent comment : @Seb DELETE_JOB_DIR seems deprecated
-    DELETE_JOB_DIR: bool = False
-    """If True deletes the Abaqus job directory after post-processing."""
-
     _OUTPUTS_TO_RESAMPLE: ClassVar[Iterable[str]] = []
     """List of names of curves outputs to be resampled into a specific size."""
 
