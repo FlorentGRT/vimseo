@@ -21,6 +21,7 @@ from gemseo.datasets.dataset import Dataset
 from gemseo.datasets.io_dataset import IODataset
 from numpy import full
 from numpy import vstack
+from numpy.testing import assert_allclose
 from numpy.testing import assert_array_equal
 
 from vimseo.problems.mock.mock_pre_run_post.mock_main import MockModel
@@ -175,3 +176,42 @@ def test_serialization(tmp_wd, mock_model_doe):
     result.to_hdf5("result.hdf5")
     serialized_result = DOEResult.from_hdf5("result.hdf5")
     assert_results_equal(result, serialized_result)
+
+
+def test_doe_without_n_samples(tmp_wd, parameter_space):
+    """Check that the number of samples is not passed to a DOE algorithm without such a
+    setting."""
+    doe_tool = DOETool()
+    doe_tool.execute(
+        model=MockModel("LC1"),
+        parameter_space=parameter_space,
+        output_names=["y1"],
+        algo="StarDOE",
+        n_samples=N_SAMPLES,
+        algo_settings={"center": {"x1": 0.5}, "two_sided": False},
+    )
+    dataset = doe_tool.result.dataset
+    assert dataset.name == "DOE_MockModel_LC1_StarDOE"
+    assert_allclose(
+        dataset.get_view(variable_names="x1").to_numpy().ravel(), [0.5, 0.525]
+    )
+
+
+def test_doe_algo_settings(tmp_wd, parameter_space):
+    """Check that the settings of the DOE algorithm are passed with the number of
+    samples."""
+    doe_tool = DOETool()
+    doe_tool.execute(
+        model=MockModel("LC1"),
+        parameter_space=parameter_space,
+        output_names=["y1"],
+        algo="MorrisDOE",
+        n_samples=4,
+        algo_settings={"step": 0.25},
+    )
+    dataset = doe_tool.result.dataset
+    assert dataset.name == "DOE_MockModel_LC1_MorrisDOE_4"
+    x1 = dataset.get_view(variable_names="x1").to_numpy().ravel()
+    assert len(x1) == 4
+    # The OAT step of x1 is 0.25 * (1 - (-1)).
+    assert abs(x1[1] - x1[0]) == pytest.approx(0.5)

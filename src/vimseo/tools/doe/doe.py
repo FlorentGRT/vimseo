@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING
 from typing import Any
 
 from gemseo import create_scenario
+from gemseo.algos.doe.factory import DOELibraryFactory
 from gemseo.algos.parameter_space import ParameterSpace
 from gemseo.utils.directory_creator import DirectoryNamingMethod
 from pydantic import Field
@@ -58,6 +59,16 @@ def _set_output_names(
     return list(model.output_grammar.names)
 
 
+def _has_n_samples(algo_name: str) -> bool:
+    """Whether a DOE algorithm has a number of samples as setting.
+
+    Args:
+        algo_name: The name of the DOE algorithm.
+    """
+    library = DOELibraryFactory().create(algo_name)
+    return "n_samples" in library.ALGORITHM_INFOS[algo_name].Settings.model_fields
+
+
 # TODO update from gemseo once branch pydantic is integrated (v6)
 class DOESettings(BaseSettings):
     output_names: list[str] = Field(
@@ -70,11 +81,11 @@ class DOESettings(BaseSettings):
         description="The name of the DOE algo. "
         "See from gemseo.api.get_available_doe_algorithms().",
     )
-    # algo_options: dict | None = Field(
-    #     default=None,
-    #     description="The options of the DOE algo "
-    #     "(See gemseo.api.get_algorithm_options_schema(algo)).",
-    # )
+    algo_settings: dict[str, Any] = Field(
+        default={},
+        description="The settings of the DOE algo, other than the number of samples "
+        "(see gemseo.get_algorithm_options_schema(algo)).",
+    )
 
 
 class DOEInputs(BaseInputs):
@@ -126,10 +137,13 @@ class DOETool(BaseAnalysisTool):
         **options,
     ) -> DOEResult:
         model = options["model"]
-        doe_name = (
-            f"DOE_{model.name}_{model.load_case.name}_{options['algo']}_"
-            f"{options['n_samples']}"
-        )
+        algo_settings = dict(options["algo_settings"])
+        # Some DOE algorithms, e.g. the ones of the OAT methods,
+        # derive their number of samples from their other settings.
+        doe_name = f"DOE_{model.name}_{model.load_case.name}_{options['algo']}"
+        if _has_n_samples(options["algo"]):
+            algo_settings["n_samples"] = options["n_samples"]
+            doe_name = f"{doe_name}_{options['n_samples']}"
 
         output_names = _set_output_names(model, options["output_names"])
 
@@ -145,10 +159,7 @@ class DOETool(BaseAnalysisTool):
             for out_name in output_names[1:]:
                 doe_scenario.add_observable(out_name)
 
-        doe_scenario.execute(
-            algo_name=options["algo"],
-            n_samples=options["n_samples"],
-        )
+        doe_scenario.execute(algo_name=options["algo"], **algo_settings)
 
         self.result.dataset = doe_scenario.formulation.optimization_problem.to_dataset(
             name=doe_name, categorize=True, opt_naming=False
