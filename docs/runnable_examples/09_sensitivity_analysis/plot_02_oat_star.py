@@ -179,10 +179,10 @@ doe_tool.execute(
 doe_tool.result.dataset
 
 # %%
-# Its samples are passed to the :class:`~.OATSensitivityTool` as ``doe_dataset``:
+# Its result is passed to the :class:`~.OATSensitivityTool` as ``doe_result``:
 # the model is not executed again.
-# The tool checks that these samples form a star
-# and deduces whether it is one-sided or two-sided.
+# This result records the DOE algorithm, which the tool checks,
+# and its settings, from which the tool reads whether the star is two-sided.
 tool = OATSensitivityTool(working_directory="oat_from_doe_results")
-tool.execute(doe_dataset=doe_tool.result.dataset)
+tool.execute(doe_result=doe_tool.result)
 tool.result.get_indices_dataframe("gradient")

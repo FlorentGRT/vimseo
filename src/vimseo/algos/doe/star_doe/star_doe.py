@@ -48,6 +48,7 @@ from numpy import apply_along_axis
 from numpy import atleast_1d
 from numpy import concatenate
 from numpy import diag
+from numpy import flatnonzero
 from numpy import isfinite
 from numpy import vstack
 
@@ -114,15 +115,19 @@ class StarDOE(BaseDOELibrary[StarDOE_Settings]):
             )
             raise ValueError(msg)
 
-        missing_names = [
-            name for name in design_space.variable_names if name not in center
-        ]
-        if missing_names:
-            center.update(
-                design_space.get_current_value(
-                    variable_names=missing_names, as_dict=True
-                )
-            )
+        # The current value of a random variable is not used,
+        # since a DOE sets it to its best sample.
+        for name in design_space.variable_names:
+            if name in center:
+                continue
+
+            if (
+                isinstance(design_space, ParameterSpace)
+                and name in design_space.uncertain_variables
+            ):
+                center[name] = design_space.distributions[name].mean
+            else:
+                center[name] = design_space.get_current_value(variable_names=[name])
 
         return concatenate([
             atleast_1d(center[name]).astype(float)
@@ -131,6 +136,11 @@ class StarDOE(BaseDOELibrary[StarDOE_Settings]):
 
     def __get_steps(self, design_space: DesignSpace, center: RealArray) -> RealArray:
         """Return the physical steps of the components of the variables.
+
+        The step of a component is relative to its center.
+        A zero center would give a zero step:
+        the step of such a component is relative to its scale instead,
+        or is the fallback step if it has no scale.
 
         Args:
             design_space: The variables space.
@@ -141,58 +151,69 @@ class StarDOE(BaseDOELibrary[StarDOE_Settings]):
         """
         relative_step = self._settings.relative_step
         steps = relative_step * np_abs(center)
-        names = design_space.variable_names
-        lower_bounds = design_space.get_lower_bounds(names)
-        upper_bounds = design_space.get_upper_bounds(names)
-        standard_deviations = self.__get_standard_deviations(design_space)
+        zero_center_components = flatnonzero(center == 0)
+        if not zero_center_components.size:
+            return steps
+
+        scales = self.__get_scales(design_space)
         component_names = self.__get_component_names(design_space)
-        for i in (center == 0).nonzero()[0]:
-            if standard_deviations[i] is not None:
-                steps[i] = relative_step * standard_deviations[i]
-                rule = "the standard deviation of its distribution"
-            elif isfinite(lower_bounds[i]) and isfinite(upper_bounds[i]):
-                steps[i] = relative_step * (upper_bounds[i] - lower_bounds[i])
-                rule = "the range of its bounds"
-            else:
+        for i in zero_center_components:
+            scale, scale_origin = scales[i]
+            if scale is None:
                 steps[i] = self._settings.fallback_step
-                rule = "the fallback step, as it has an undefined bound"
+                step_origin = "the fallback step, as it has no scale"
+            else:
+                steps[i] = relative_step * scale
+                step_origin = scale_origin
 
             LOGGER.warning(
                 "The center of %s is zero; its step %s is computed from %s.",
                 component_names[i],
                 steps[i],
-                rule,
+                step_origin,
             )
 
         return steps
 
     @staticmethod
-    def __get_standard_deviations(design_space: DesignSpace) -> list[float | None]:
-        """Return the standard deviations of the components of the variables.
+    def __get_scales(design_space: DesignSpace) -> list[tuple[float | None, str]]:
+        """Return the scales of the components of the variables.
+
+        The scale of a component is the standard deviation of its distribution
+        if the variable is random,
+        otherwise the range of its bounds if both are defined and different.
 
         Args:
             design_space: The variables space.
 
         Returns:
-            The standard deviations of the components, ``None`` for a deterministic
-            component.
+            The scale of each component, ``None`` if it has no scale,
+            and the origin of this scale.
         """
-        standard_deviations = []
-        for name in design_space.variable_names:
-            size = design_space.get_size(name)
+        names = design_space.variable_names
+        upper_bounds = design_space.get_upper_bounds(names)
+        ranges = upper_bounds - design_space.get_lower_bounds(names)
+        scales = []
+        for name in names:
+            indices = design_space.get_variables_indexes([name])
             if (
                 isinstance(design_space, ParameterSpace)
                 and name in design_space.uncertain_variables
             ):
                 values = atleast_1d(design_space.distributions[name].standard_deviation)
-                standard_deviations.extend(
-                    float(values[0] if values.size == 1 else values[i])
-                    for i in range(size)
-                )
+                values = values.repeat(indices.size) if values.size == 1 else values
+                origin = "the standard deviation of its distribution"
+                scales.extend((float(value), origin) for value in values)
             else:
-                standard_deviations.extend([None] * size)
+                # A zero range would give a zero step.
+                scales.extend(
+                    (float(ranges[i]), "the range of its bounds")
+                    if isfinite(ranges[i]) and ranges[i] > 0
+                    else (None, "")
+                    for i in indices
+                )
 
-        return standard_deviations
+        return scales
 
     @staticmethod
     def __get_component_names(design_space: DesignSpace) -> list[str]:

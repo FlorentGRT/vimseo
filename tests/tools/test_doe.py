@@ -197,6 +197,59 @@ def test_doe_without_n_samples(tmp_wd, parameter_space):
     )
 
 
+def test_validated_algo_settings(tmp_wd, parameter_space):
+    """Check that the metadata store the settings as validated by the DOE algorithm,
+    with the default values of the settings specific to this algorithm."""
+    doe_tool = DOETool()
+    doe_tool.execute(
+        model=MockModel("LC1"),
+        parameter_space=parameter_space,
+        output_names=["y1"],
+        algo="StarDOE",
+        algo_settings={"center": {"x1": 0.5}, "two_sided": "false", "n_processes": 1},
+    )
+    assert doe_tool.result.metadata.settings["algo_settings"] == {
+        "center": {"x1": 0.5},
+        "relative_step": 0.05,
+        "two_sided": False,
+        "fallback_step": 0.05,
+        "n_processes": 1,
+    }
+    assert len(doe_tool.result.dataset) == 2
+
+
+def test_algo_settings_and_dataset_name_from_disk(tmp_wd, parameter_space):
+    """Check that the settings of the DOE algorithm and the name of the dataset are
+    kept when the result is saved."""
+    doe_tool = DOETool()
+    doe_tool.execute(
+        model=MockModel("LC1"),
+        parameter_space=parameter_space,
+        output_names=["y1"],
+        algo="StarDOE",
+        algo_settings={"two_sided": False},
+    )
+    doe_tool.save_results()
+    result = BaseTool.load_results(doe_tool.working_directory / "DOETool_result.hdf5")
+    assert result.dataset.name == "DOE_MockModel_LC1_StarDOE"
+    assert not result.metadata.settings["algo_settings"]["two_sided"]
+
+
+def test_parameter_space_not_modified(tmp_wd):
+    """Check that a DOE does not set the current value of the variables to its best
+    sample."""
+    parameter_space = ParameterSpace()
+    parameter_space.add_variable("x1", lower_bound=-1.0, upper_bound=1.0, value=0.5)
+    DOETool().execute(
+        model=MockModel("LC1"),
+        parameter_space=parameter_space,
+        output_names=["y1"],
+        algo="OT_MONTE_CARLO",
+        n_samples=N_SAMPLES,
+    )
+    assert_allclose(parameter_space.get_current_value(["x1"]), [0.5])
+
+
 def test_doe_algo_settings(tmp_wd, parameter_space):
     """Check that the settings of the DOE algorithm are passed with the number of
     samples."""

@@ -31,8 +31,10 @@ class StarDOE_Settings(BaseDOESettings):
     center: Mapping[str, float | list[float]] = Field(
         default={},
         description="The physical values of the variables at the center of the star. "
-        "A variable missing from this mapping takes its current value in the "
-        "variables space, i.e. the mean of its distribution for a random variable.",
+        "A variable missing from this mapping takes the mean of its distribution "
+        "if it is random, otherwise its current value in the variables space. "
+        "The current value of a random variable is not used, "
+        "since a DOE sets it to its best sample.",
     )
 
     relative_step: PositiveFloat = Field(
@@ -44,7 +46,8 @@ The physical step of the :math:`i`-th component is the first applicable rule amo
 1. :math:`\delta|x_{0,i}|` if the center :math:`x_{0,i}` is not zero,
 2. :math:`\delta\sigma_i` if the variable is random,
    where :math:`\sigma_i` is the standard deviation of its marginal distribution,
-3. :math:`\delta(u_i-l_i)` if both bounds :math:`l_i` and :math:`u_i` are defined,
+3. :math:`\delta(u_i-l_i)` if both bounds :math:`l_i` and :math:`u_i` are defined
+   and different,
 4. ``fallback_step`` otherwise.""",
     )
 
@@ -58,5 +61,5 @@ The physical step of the :math:`i`-th component is the first applicable rule amo
     fallback_step: PositiveFloat = Field(
         default=0.05,
         description="The absolute step of a component whose center is zero, "
-        "which is not random and has at least one undefined bound.",
+        "which is not random and has an undefined bound or equal bounds.",
     )

@@ -22,7 +22,6 @@ from typing import TYPE_CHECKING
 
 import plotly.graph_objects as go
 from gemseo.algos.parameter_space import ParameterSpace
-from gemseo.datasets.dataset import Dataset
 from gemseo.datasets.io_dataset import IODataset
 from gemseo.utils.directory_creator import DirectoryNamingMethod
 from numpy import abs as np_abs
@@ -41,7 +40,9 @@ from vimseo.tools.base_composite_tool import BaseCompositeTool
 from vimseo.tools.base_settings import BaseInputs
 from vimseo.tools.base_settings import BaseSettings
 from vimseo.tools.doe.doe import DOETool
-from vimseo.tools.sensitivity.doe_samples import check_star_structure
+from vimseo.tools.doe.doe_result import DOEResult
+from vimseo.tools.sensitivity.doe_samples import check_no_nan_output
+from vimseo.tools.sensitivity.doe_samples import get_algo_settings
 from vimseo.tools.sensitivity.doe_samples import get_input_samples
 from vimseo.tools.sensitivity.doe_samples import get_output_names
 from vimseo.tools.sensitivity.doe_samples import get_variable_names
@@ -84,10 +85,10 @@ class OATSensitivitySettings(BaseSettings):
 class OATSensitivityInputs(BaseInputs):
     model: IntegratedModel | None = None
     parameter_space: ParameterSpace = ParameterSpace()
-    doe_dataset: Dataset | None = Field(
+    doe_result: DOEResult | None = Field(
         default=None,
-        description="The samples of a star DOE prepared in advance, "
-        "e.g. the dataset of a DOETool executed with the algo 'StarDOE'. "
+        description="The result of a star DOE prepared in advance, "
+        "i.e. of a DOETool executed with the algo 'StarDOE'. "
         "If ``None``, execute the star DOE on the model over the parameter space.",
     )
 
@@ -97,7 +98,7 @@ class OATSensitivityTool(BaseAnalysisTool):
 
     The outputs of an :class:`~.IntegratedModel` are computed at the center of a star
     and when each input component varies alone, using the DOE algorithm
-    ``"StarDOE"``; the samples of a star DOE prepared in advance can be used instead.
+    ``"StarDOE"``; the result of a star DOE prepared in advance can be used instead.
 
     See :class:`.OATSensitivityResult` for the definition of the indices.
     """
@@ -138,26 +139,21 @@ class OATSensitivityTool(BaseAnalysisTool):
         if model is not None:
             self.result.metadata.model = model.description
 
-        doe_dataset = options["doe_dataset"]
-        if doe_dataset is None:
+        doe_result = options["doe_result"]
+        if doe_result is None:
             if model is None:
-                msg = "Either a model or the samples of a star DOE must be provided."
+                msg = "Either a model or the result of a star DOE must be provided."
                 raise ValueError(msg)
 
-            doe_dataset = (
-                self
-                ._subtools["DOETool"]
-                .execute(
-                    model=model,
-                    parameter_space=options["parameter_space"],
-                    output_names=options["output_names"]
-                    or model.get_output_data_names(remove_metadata=True),
-                    algo="StarDOE",
-                    algo_settings={
-                        name: options[name] for name in self._STAR_SETTING_NAMES
-                    },
-                )
-                .dataset
+            doe_result = self._subtools["DOETool"].execute(
+                model=model,
+                parameter_space=options["parameter_space"],
+                output_names=options["output_names"]
+                or model.get_output_data_names(remove_metadata=True),
+                algo="StarDOE",
+                algo_settings={
+                    name: options[name] for name in self._STAR_SETTING_NAMES
+                },
             )
         else:
             ignored_names = [
@@ -167,16 +163,32 @@ class OATSensitivityTool(BaseAnalysisTool):
             ]
             if ignored_names:
                 LOGGER.warning(
-                    "The settings %s are ignored since the samples of a star DOE "
-                    "are provided.",
+                    "The settings %s are ignored since the result of a star DOE "
+                    "is provided.",
                     ignored_names,
                 )
-            self.result.metadata.report["doe_dataset_name"] = doe_dataset.name
+            self.result.metadata.report["doe_dataset_name"] = doe_result.dataset.name
 
+        two_sided = StarDOE_Settings(
+            **get_algo_settings(doe_result, ("StarDOE",), "OAT")
+        ).two_sided
+        doe_dataset = doe_result.dataset
         output_names = get_output_names(doe_dataset, options["output_names"])
         self.result.metadata.report["output_names"] = output_names
         dataset = to_io_dataset(doe_dataset, output_names)
-        self.result.two_sided = check_star_structure(dataset)
+        dimension = dataset.group_names_to_n_components[IODataset.INPUT_GROUP]
+        n_samples = (2 if two_sided else 1) * dimension + 1
+        if len(dataset) != n_samples:
+            msg = (
+                f"The star DOE has {len(dataset)} samples, whereas a "
+                f"{'two' if two_sided else 'one'}-sided star with {dimension} input "
+                f"components has {n_samples}; an evaluation of the model may have "
+                "failed."
+            )
+            raise ValueError(msg)
+
+        check_no_nan_output(dataset, "OAT")
+        self.result.two_sided = two_sided
         self.result.dataset = dataset
         self.__compute_indices(dataset, output_names)
         return self.result

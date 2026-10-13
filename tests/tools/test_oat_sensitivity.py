@@ -15,8 +15,12 @@
 
 from __future__ import annotations
 
+import re
+
+import plotly.graph_objects as go
 import pytest
 from gemseo.algos.parameter_space import ParameterSpace
+from gemseo.datasets.io_dataset import IODataset
 from numpy import array
 from numpy.testing import assert_allclose
 
@@ -76,47 +80,92 @@ def test_indices(oat_tool):
     assert "x1" in str(result)
 
 
-def test_prepared_doe(tmp_wd, oat_tool, parameter_space):
-    """Check that the samples of a star DOE prepared in advance give the same
-    indices.
+def _prepare_star_doe(parameter_space, **algo_settings):
+    """Return a DOETool that executed a star DOE of MockModel in advance.
 
-    The DOE computes all the outputs of the model, including its metadata, which are
-    filtered out.
+    The DOE computes all the outputs of the model, including its metadata.
     """
     doe_tool = DOETool()
     doe_tool.execute(
         model=MockModel("LC1"),
         parameter_space=parameter_space,
         algo="StarDOE",
-        algo_settings={"center": CENTER},
+        algo_settings={"center": CENTER, **algo_settings},
+    )
+    return doe_tool
+
+
+def test_prepared_doe(tmp_wd, oat_tool, parameter_space):
+    """Check that the result of a star DOE prepared in advance gives the same
+    indices, the metadata of the model being filtered out."""
+    doe_result = _prepare_star_doe(parameter_space).result
+    tool = OATSensitivityTool()
+    tool.execute(doe_result=doe_result, output_names=["y1"])
+    assert_results_equal(tool.result.indices, oat_tool.result.indices)
+    assert tool.result.two_sided
+    assert tool.result.metadata.report["doe_dataset_name"] == doe_result.dataset.name
+
+
+def test_prepared_one_sided_doe_from_disk(tmp_wd, parameter_space):
+    """Check that a one-sided star DOE saved on the disk is read as one-sided.
+
+    Whether the star is two-sided is read from the settings of the DOE algorithm.
+    """
+    doe_tool = _prepare_star_doe(parameter_space, two_sided=False)
+    doe_tool.save_results()
+    doe_result = BaseTool.load_results(
+        doe_tool.working_directory / "DOETool_result.hdf5"
     )
     tool = OATSensitivityTool()
-    tool.execute(doe_dataset=doe_tool.result.dataset, output_names=["y1"])
-    assert_results_equal(tool.result.indices, oat_tool.result.indices)
-    assert tool.result.metadata.report["doe_dataset_name"] == (
-        doe_tool.result.dataset.name
-    )
+    tool.execute(doe_result=doe_result, output_names=["y1"])
+    assert tool.result.two_sided is False
+    assert "delta_f_minus" not in tool.result.indices
+    assert_allclose(tool.result.indices["gradient"]["y1"][0]["x1"], [2.0])
 
 
-def test_prepared_doe_with_star_settings(tmp_wd, oat_tool, caplog):
+def test_prepared_doe_missing_sample(tmp_wd, parameter_space):
+    """Check that a star DOE with a missing sample, e.g. a failed evaluation, is
+    rejected."""
+    doe_result = _prepare_star_doe(parameter_space).result
+    doe_result.dataset = doe_result.dataset.iloc[:-1]
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "The star DOE has 4 samples, whereas a two-sided star with 2 input "
+            "components has 5; an evaluation of the model may have failed."
+        ),
+    ):
+        OATSensitivityTool().execute(doe_result=doe_result, output_names=["y1"])
+
+
+def test_prepared_doe_nan_output(tmp_wd, parameter_space):
+    """Check that a star DOE with a NaN output, e.g. a failed evaluation, is
+    rejected."""
+    doe_result = _prepare_star_doe(parameter_space).result
+    doe_result.dataset.loc[2, (IODataset.OUTPUT_GROUP, "y1", 0)] = float("nan")
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "The sensitivity analysis 'OAT' cannot use the samples [2] of the DOE"
+        ),
+    ):
+        OATSensitivityTool().execute(doe_result=doe_result, output_names=["y1"])
+
+
+def test_prepared_doe_with_star_settings(tmp_wd, parameter_space, caplog):
     """Check that the settings of the star DOE are ignored with a prepared DOE."""
-    OATSensitivityTool().execute(doe_dataset=oat_tool.result.dataset, relative_step=0.1)
+    OATSensitivityTool().execute(
+        doe_result=_prepare_star_doe(parameter_space).result, relative_step=0.1
+    )
     assert "The settings ['relative_step'] are ignored" in caplog.text
 
 
 @pytest.mark.parametrize(
-    ("algo", "algo_settings", "message"),
-    [
-        ("OT_MONTE_CARLO", {}, "The DOE has 4 samples, whereas a star DOE"),
-        (
-            "OATDOE",
-            {"initial_point": array([0.5, 0.5])},
-            "The sample 2 of the DOE must differ from the center",
-        ),
-    ],
+    ("algo", "algo_settings"),
+    [("OT_MONTE_CARLO", {}), ("OATDOE", {"initial_point": array([0.5, 0.5])})],
 )
-def test_not_a_star(tmp_wd, parameter_space, algo, algo_settings, message):
-    """Check that the samples of a DOE that is not a star are rejected."""
+def test_not_a_star(tmp_wd, parameter_space, algo, algo_settings):
+    """Check that the result of a DOE other than StarDOE is rejected."""
     doe_tool = DOETool()
     doe_tool.execute(
         model=MockModel("LC1"),
@@ -126,13 +175,19 @@ def test_not_a_star(tmp_wd, parameter_space, algo, algo_settings, message):
         n_samples=4,
         algo_settings=algo_settings,
     )
-    with pytest.raises(ValueError, match=message):
-        OATSensitivityTool().execute(doe_dataset=doe_tool.result.dataset)
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "The sensitivity analysis 'OAT' requires the samples of a DOE generated "
+            f"by 'StarDOE', whereas they were generated by '{algo}'."
+        ),
+    ):
+        OATSensitivityTool().execute(doe_result=doe_tool.result)
 
 
 def test_no_model_nor_doe(tmp_wd):
     """Check that a model or a prepared DOE is required."""
-    with pytest.raises(ValueError, match="Either a model or the samples"):
+    with pytest.raises(ValueError, match="Either a model or the result"):
         OATSensitivityTool().execute()
 
 
@@ -234,3 +289,46 @@ def test_variables_not_sorted(tmp_wd):
     assert list(tool.result.center) == ["x1_maximum_only", "x1"]
     assert_allclose(tool.result.indices["gradient"]["y1"][0]["x1"], [2.0])
     assert_allclose(tool.result.indices["gradient"]["y1"][0]["x1_maximum_only"], [0.0])
+
+
+def test_plot_one_sided_and_shown(tmp_wd, parameter_space, monkeypatch):
+    """Check the tornado diagram of a one-sided analysis, shown and not saved."""
+    shown = []
+    monkeypatch.setattr(go.Figure, "show", lambda figure: shown.append(figure))
+    tool = OATSensitivityTool()
+    tool.execute(
+        model=MockModel("LC1"),
+        parameter_space=parameter_space,
+        output_names=["y1"],
+        center=CENTER,
+        two_sided=False,
+    )
+    figures = tool.plot_results(tool.result)
+    assert [trace.name for trace in figures["tornado_y1"].data] == ["+ step"]
+    assert shown == [figures["tornado_y1"]]
+    assert not (tool.working_directory / "tornado_y1.html").exists()
+
+
+def test_parameter_space_not_modified(tmp_wd):
+    """Check that an analysis does not move the center of a next one.
+
+    A DOE sets the current value of the variables to its best sample, here the one
+    minimizing y1 = 2 * x1 + 5.
+    """
+    parameter_space = ParameterSpace()
+    parameter_space.add_variable("x1", lower_bound=-1.0, upper_bound=1.0, value=0.5)
+    parameter_space.add_random_variable(
+        "x1_maximum_only", "OTUniformDistribution", minimum=-1.0, maximum=1.0
+    )
+    centers = []
+    for _ in range(2):
+        tool = OATSensitivityTool()
+        tool.execute(
+            model=MockModel("LC1"), parameter_space=parameter_space, output_names=["y1"]
+        )
+        centers.append(tool.result.center)
+
+    assert_results_equal(centers[0], centers[1])
+    assert_allclose(centers[0]["x1"], [0.5])
+    assert_allclose(centers[0]["x1_maximum_only"], [0.0])
+    assert_allclose(parameter_space.get_current_value(["x1"]), [0.5])

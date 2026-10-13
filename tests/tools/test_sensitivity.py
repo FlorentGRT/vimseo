@@ -15,8 +15,12 @@
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from gemseo.algos.parameter_space import ParameterSpace
+from gemseo.datasets.dataset import Dataset
+from gemseo.datasets.io_dataset import IODataset
 from numpy import array
 from numpy.testing import assert_allclose
 from pandas.testing import assert_frame_equal
@@ -26,6 +30,8 @@ from vimseo.problems.mock.mock_pre_run_post.mock_main import MockModel
 from vimseo.tools.base_result import assert_results_equal
 from vimseo.tools.base_tool import BaseTool
 from vimseo.tools.doe.doe import DOETool
+from vimseo.tools.doe.doe_result import DOEResult
+from vimseo.tools.sensitivity.indices import indices_to_dataframe
 from vimseo.tools.sensitivity.sensitivity import SensitivityTool
 from vimseo.tools.sensitivity.sensitivity import SensitivityToolInputs
 from vimseo.tools.sensitivity.sensitivity import SensitivityToolSettings
@@ -168,8 +174,8 @@ def test_serialization(tmp_wd, sensitivity_tool):
     assert_results_equal(result, serialized_result)
 
 
-def _prepare_doe(parameter_space, algo, n_samples, output_names=()):
-    """Return the samples of a DOE of MockModel prepared in advance."""
+def _prepare_doe(parameter_space, algo, n_samples, output_names=(), **algo_settings):
+    """Return the result of a DOE of MockModel prepared in advance."""
     doe_tool = DOETool()
     doe_tool.execute(
         model=MockModel("LC1"),
@@ -177,24 +183,25 @@ def _prepare_doe(parameter_space, algo, n_samples, output_names=()):
         algo=algo,
         n_samples=n_samples,
         output_names=list(output_names),
+        algo_settings=algo_settings,
     )
-    return doe_tool.result.dataset
+    return doe_tool.result
 
 
 def test_morris_prepared_doe(tmp_wd, parameter_space, sensitivity_tool):
-    """Check a Morris analysis from the samples of a MorrisDOE prepared in advance.
+    """Check a Morris analysis from the result of a MorrisDOE prepared in advance.
 
     The DOE computes all the outputs of the model, including its metadata, which are
     filtered out.
     """
-    dataset = _prepare_doe(parameter_space, "MorrisDOE", 15)
+    doe_result = _prepare_doe(parameter_space, "MorrisDOE", 15)
     tool = SensitivityTool()
     tool.execute(
-        inputs=SensitivityToolInputs(doe_dataset=dataset),
+        inputs=SensitivityToolInputs(doe_result=doe_result),
         settings=SensitivityToolSettings(sensitivity_algo="Morris"),
     )
     assert tool.result.metadata.report["output_names"] == ["y1"]
-    assert tool.result.metadata.report["doe_dataset_name"] == dataset.name
+    assert tool.result.metadata.report["doe_dataset_name"] == doe_result.dataset.name
     assert tool.result.variable_dimensions == {
         "x1": 1,
         "x1_maximum_only": 1,
@@ -207,30 +214,109 @@ def test_morris_prepared_doe(tmp_wd, parameter_space, sensitivity_tool):
     tool.result.analysis.compute_indices(normalize=True)
 
 
+def test_morris_prepared_doe_step(tmp_wd, parameter_space):
+    """Check that the relative step of a prepared MorrisDOE is read from its settings.
+
+    The elementary effects of y1 = 2 * x1 + 5 with x1 in [-1, 1] are 4 times the step.
+    """
+    tool = SensitivityTool()
+    tool.execute(
+        doe_result=_prepare_doe(parameter_space, "MorrisDOE", 15, ["y1"], step=0.1),
+        sensitivity_algo="Morris",
+    )
+    assert tool.result.analysis.dataset.misc["step"] == pytest.approx(0.1)
+    assert tool.result.indices.mu_star["y1"][0]["x1"] == pytest.approx(0.4)
+
+
+def test_morris_prepared_doe_missing_sample(tmp_wd, parameter_space):
+    """Check that a Morris DOE with a missing sample, e.g. a failed evaluation, is
+    rejected."""
+    doe_result = _prepare_doe(parameter_space, "MorrisDOE", 15, ["y1"])
+    doe_result.dataset = doe_result.dataset.iloc[:-1]
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "The Morris DOE has 14 samples, whereas its trajectories have 3 samples "
+            "each; an evaluation of the model may have failed."
+        ),
+    ):
+        SensitivityTool().execute(doe_result=doe_result, sensitivity_algo="Morris")
+
+
+def test_morris_prepared_doe_nan_output(tmp_wd, parameter_space):
+    """Check that a Morris DOE with a NaN output, e.g. a failed evaluation, is
+    rejected."""
+    doe_result = _prepare_doe(parameter_space, "MorrisDOE", 15, ["y1"])
+    doe_result.dataset.loc[4, (IODataset.OUTPUT_GROUP, "y1", 0)] = float("nan")
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "The sensitivity analysis 'Morris' cannot use the samples [4] of the DOE"
+        ),
+    ):
+        SensitivityTool().execute(doe_result=doe_result, sensitivity_algo="Morris")
+
+
+def test_hsic_prepared_doe_nan_output(tmp_wd, parameter_space, caplog):
+    """Check that a HSIC analysis removes the samples with a NaN output."""
+    doe_result = _prepare_doe(parameter_space, "OT_MONTE_CARLO", 10, ["y1"])
+    doe_result.dataset.loc[3, (IODataset.OUTPUT_GROUP, "y1", 0)] = float("nan")
+    tool = SensitivityTool()
+    tool.execute(doe_result=doe_result, sensitivity_algo="HSIC")
+    assert len(tool.result.analysis.dataset) == 9
+    assert "The samples [3] of the DOE are removed" in caplog.text
+    assert set(tool.result.indices.hsic["y1"][0]) == {"x1", "x1_maximum_only"}
+
+
 def test_hsic_prepared_doe(tmp_wd, parameter_space):
     """Check a HSIC analysis from the i.i.d. samples of a Monte Carlo sampling
     prepared in advance."""
     tool = SensitivityTool()
     tool.execute(
-        doe_dataset=_prepare_doe(parameter_space, "OT_MONTE_CARLO", 10, ["y1"]),
+        doe_result=_prepare_doe(parameter_space, "OT_MONTE_CARLO", 10, ["y1"]),
         sensitivity_algo="HSIC",
     )
     assert set(tool.result.indices.hsic["y1"][0]) == {"x1", "x1_maximum_only"}
 
 
-def test_morris_prepared_doe_not_morris(tmp_wd, parameter_space):
-    """Check that a Morris analysis rejects the samples of a DOE other than
-    MorrisDOE."""
-    with pytest.raises(ValueError, match="use the DOE algorithm 'MorrisDOE'"):
+@pytest.mark.parametrize(
+    ("sensitivity_algo", "expected_algos"),
+    [
+        ("Morris", "'MorrisDOE'"),
+        ("HSIC", "'OT_MONTE_CARLO' or 'OT_RANDOM' or 'MC'"),
+    ],
+)
+def test_prepared_doe_unsuitable_algo(
+    tmp_wd, parameter_space, sensitivity_algo, expected_algos
+):
+    """Check that an analysis rejects a DOE whose algorithm is not suitable, here a
+    Latin Hypercube Sampling."""
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            f"The sensitivity analysis '{sensitivity_algo}' requires the samples of a "
+            f"DOE generated by {expected_algos}, "
+            "whereas they were generated by 'OT_OPT_LHS'."
+        ),
+    ):
         SensitivityTool().execute(
-            doe_dataset=_prepare_doe(parameter_space, "OT_OPT_LHS", 6, ["y1"]),
-            sensitivity_algo="Morris",
+            doe_result=_prepare_doe(parameter_space, "OT_OPT_LHS", 6, ["y1"]),
+            sensitivity_algo=sensitivity_algo,
         )
+
+
+def test_prepared_doe_unknown_algo(tmp_wd, parameter_space):
+    """Check that a DOE whose algorithm is unknown is rejected."""
+    doe_result = DOEResult(
+        dataset=_prepare_doe(parameter_space, "OT_MONTE_CARLO", 4, ["y1"]).dataset
+    )
+    with pytest.raises(ValueError, match="by an unknown DOE algorithm"):
+        SensitivityTool().execute(doe_result=doe_result, sensitivity_algo="HSIC")
 
 
 def test_no_model_nor_doe(tmp_wd):
     """Check that a model or a prepared DOE is required."""
-    with pytest.raises(ValueError, match="Either a model or the samples"):
+    with pytest.raises(ValueError, match="Either a model or the result"):
         SensitivityTool().execute(sensitivity_algo="HSIC")
 
 
@@ -247,7 +333,7 @@ def test_morris_prepared_doe_variables_not_sorted(tmp_wd):
         )
     tool = SensitivityTool()
     tool.execute(
-        doe_dataset=_prepare_doe(parameter_space, "MorrisDOE", 15, ["y1"]),
+        doe_result=_prepare_doe(parameter_space, "MorrisDOE", 15, ["y1"]),
         sensitivity_algo="Morris",
     )
     assert tool.result.indices.mu["y1"][0]["x1"] == pytest.approx(0.2)
@@ -305,3 +391,46 @@ def test_indices_dataframe_hsic_vector(tmp_wd):
     assert table.loc["x3[1]", "y5[2]"] == pytest.approx(
         float(tool.result.indices.r2_hsic["y5"][2]["x3"][1])
     )
+
+
+def test_unhandled_algo(tmp_wd, parameter_space):
+    """Check that a sensitivity analysis other than Morris and HSIC is rejected."""
+    with pytest.raises(ValueError, match="Sobol is not handled"):
+        SensitivityTool().execute(
+            model=MockModel("LC1"),
+            parameter_space=parameter_space,
+            sensitivity_algo="Sobol",
+        )
+
+
+def test_prepared_doe_missing_output(tmp_wd, parameter_space):
+    """Check that the outputs of the analysis must be in the prepared DOE."""
+    with pytest.raises(ValueError, match=r"The outputs \['y2'\] are missing"):
+        SensitivityTool().execute(
+            doe_result=_prepare_doe(parameter_space, "OT_MONTE_CARLO", 4, ["y1"]),
+            sensitivity_algo="HSIC",
+            output_names=["y2"],
+        )
+
+
+def test_prepared_doe_without_output_group(tmp_wd):
+    """Check that the prepared DOE must have an output group."""
+    doe_result = DOEResult(
+        dataset=Dataset.from_array(
+            array([[0.0], [1.0]]),
+            ["x1"],
+            variable_names_to_group_names={"x1": IODataset.INPUT_GROUP},
+        )
+    )
+    doe_result.metadata.settings["algo"] = "OT_MONTE_CARLO"
+    with pytest.raises(ValueError, match="must have a group 'outputs'"):
+        SensitivityTool().execute(
+            doe_result=doe_result, sensitivity_algo="HSIC", output_names=["x1"]
+        )
+
+
+def test_indices_dataframe_constant_output_component():
+    """Check that the constant output components are not in the table."""
+    table = indices_to_dataframe({"y": [{"x": array([1.0])}, None]})
+    assert list(table.columns) == ["y[0]"]
+    assert table.loc["x", "y[0]"] == pytest.approx(1.0)

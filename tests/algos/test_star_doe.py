@@ -100,8 +100,19 @@ def test_zero_center(star_doe, caplog):
         atol=1e-12,
     )
     assert "the range of its bounds" in caplog.text
-    assert "the fallback step, as it has an undefined bound" in caplog.text
+    assert "the fallback step, as it has no scale" in caplog.text
     assert "the standard deviation of its distribution" in caplog.text
+
+
+def test_zero_center_and_equal_bounds(star_doe):
+    """Check that a zero center between equal bounds does not give a zero step.
+
+    The fallback step is used instead, which leaves the bounds.
+    """
+    space = ParameterSpace()
+    space.add_variable("a", lower_bound=0.0, upper_bound=0.0, value=0.0)
+    with pytest.raises(ValueError, match=re.escape("outside the bounds of ['a']")):
+        star_doe.compute_doe(space)
 
 
 def test_vector(star_doe):
@@ -128,3 +139,19 @@ def test_unknown_center(star_doe, variables_space):
     """Check that a center with an unknown variable raises an error."""
     with pytest.raises(ValueError, match=re.escape("The variables ['d']")):
         star_doe.compute_doe(variables_space, center={"d": 1.0})
+
+
+def test_random_center_is_mean(star_doe, variables_space):
+    """Check that the center of a random variable is the mean of its distribution,
+    not its current value, which a previous DOE may have set to its best sample."""
+    variables_space.set_current_variable("c", array([4.0]))
+    samples = star_doe.compute_doe(variables_space, two_sided=False)
+    assert_allclose(samples[0], [2.0, 1.0, 3.0])
+
+
+def test_random_vector_center_is_mean(star_doe):
+    """Check the center of a random vector."""
+    space = ParameterSpace()
+    space.add_random_vector("x", "OTNormalDistribution", size=2, mu=[1.0], sigma=[0.1])
+    samples = star_doe.compute_doe(space, two_sided=False)
+    assert_allclose(samples, array([[1.0, 1.0], [1.05, 1.0], [1.0, 1.05]]))
