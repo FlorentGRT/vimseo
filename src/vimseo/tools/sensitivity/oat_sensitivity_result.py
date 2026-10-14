@@ -90,7 +90,10 @@ class OATSensitivityResult(BaseResult):
     def sort_input_variables(
         self, output_name: str, output_component: int = 0
     ) -> list[str]:
-        """Sort the input components by decreasing absolute ``delta_f``.
+        r"""Sort the input components by decreasing absolute ``delta_f``.
+
+        ``delta_f`` is the centered variation :math:`(f^+_i-f^-_i)/2`
+        for a two-sided star, :math:`f^+_i-f_0` otherwise.
 
         Args:
             output_name: The name of the output.
@@ -105,6 +108,21 @@ class OATSensitivityResult(BaseResult):
         )
         return sorted(values, key=lambda name: abs(values[name]), reverse=True)
 
+    def get_zero_center_names(self) -> list[str]:
+        """Return the input components whose center is zero.
+
+        Their step is not relative to their center,
+        so their indices are not comparable with those of the other components.
+
+        Returns:
+            The names of the input components whose center is zero.
+        """
+        return [
+            name
+            for name, value in flatten_components(self.center).items()
+            if value == 0
+        ]
+
     def __str__(self) -> str:
         text = MultiLineString()
         text.add("Results of a star One-factor-at-a-Time sensitivity analysis.")
@@ -112,16 +130,28 @@ class OATSensitivityResult(BaseResult):
             dumps(self.metadata, sort_keys=True, indent=4, cls=EnhancedJSONEncoder)
         )
         text.add("")
-        text.add("Input variables by decreasing order of influence:")
+        text.add("Input variables by decreasing absolute centered variation delta_f:")
         text.indent()
         for output_name, components in self.indices.get("delta_f", {}).items():
-            for i in range(len(components)):
-                text.add(
-                    f"For output {output_name}[{i}]: "
-                    f"{self.sort_input_variables(output_name, i)}."
+            for i, component in enumerate(components):
+                values = flatten_components(component)
+                ranking = ", ".join(
+                    f"{name} ({values[name]:.4g})"
+                    for name in self.sort_input_variables(output_name, i)
                 )
+                text.add(f"For output {output_name}[{i}]: {ranking}.")
+        zero_center_names = self.get_zero_center_names()
+        if zero_center_names:
+            text.add(
+                f"Warning: the steps of {zero_center_names} are not relative to "
+                "their zero center; their ranking is not comparable."
+            )
         text.dedent()
         for index_name in self.indices:
+            text.add("")
             text.add(f"Index {index_name}:")
-            text.add(str(self.get_indices_dataframe(index_name)))
+            text.indent()
+            for line in str(self.get_indices_dataframe(index_name)).splitlines():
+                text.add(line)
+            text.dedent()
         return str(text)

@@ -47,8 +47,12 @@ from vimseo import EXAMPLE_RUNS_DIR
 from vimseo.api import activate_logger
 from vimseo.api import create_model
 from vimseo.core.model_settings import IntegratedModelSettings
+from vimseo.tools.doe.doe import DOEInputs
+from vimseo.tools.doe.doe import DOESettings
 from vimseo.tools.doe.doe import DOETool
 from vimseo.tools.sensitivity.sensitivity import SensitivityTool
+from vimseo.tools.sensitivity.sensitivity import SensitivityToolInputs
+from vimseo.tools.sensitivity.sensitivity import SensitivityToolSettings
 from vimseo.tools.space.space_tool import SpaceTool
 
 activate_logger(level=logging.INFO)
@@ -124,11 +128,12 @@ print(space_tool.parameter_space)
 output_names = ["reaction_forces", "dplt_at_force_location", "maximum_dplt"]
 tool = SensitivityTool(working_directory="sensitivity_tool_results")
 tool.execute(
-    model=model,
-    parameter_space=space_tool.parameter_space,
-    output_names=output_names,
-    sensitivity_algo="MorrisAnalysis",
-    n_replicates=5,
+    inputs=SensitivityToolInputs(
+        model=model, parameter_space=space_tool.parameter_space
+    ),
+    settings=SensitivityToolSettings(
+        output_names=output_names, sensitivity_algo="MorrisAnalysis", n_replicates=5
+    ),
 )
 tool.save_results()
 print(tool.result)
@@ -175,22 +180,26 @@ figures["bar_plot"]
 n_replicates = 5
 doe_tool = DOETool(working_directory="morris_doe_results")
 doe_tool.execute(
-    model=model,
-    parameter_space=space_tool.parameter_space,
-    output_names=output_names,
-    algo="MorrisDOE",
-    n_samples=n_replicates * (space_tool.parameter_space.dimension + 1),
-    algo_settings={"step": 0.05},
+    inputs=DOEInputs(model=model, parameter_space=space_tool.parameter_space),
+    settings=DOESettings(
+        output_names=output_names,
+        algo="MorrisDOE",
+        n_samples=n_replicates * (space_tool.parameter_space.dimension + 1),
+        algo_settings={"step": 0.05},
+    ),
 )
 doe_tool.result.dataset
 
 # %%
-# The relative step is read from the settings of the DOE.
+# The Morris indices divide the output variations by the step of the DOE.
+# This step is read from the settings recorded in the DOE result,
+# so it does not have to be passed again and cannot differ from the samples.
 tool = SensitivityTool(working_directory="morris_from_doe_results")
 tool.execute(
-    doe_result=doe_tool.result,
-    output_names=output_names,
-    sensitivity_algo="MorrisAnalysis",
+    inputs=SensitivityToolInputs(doe_result=doe_tool.result),
+    settings=SensitivityToolSettings(
+        output_names=output_names, sensitivity_algo="MorrisAnalysis"
+    ),
 )
 tool.result.get_indices_dataframe("sigma")
 
@@ -203,11 +212,10 @@ tool.result.get_indices_dataframe("sigma")
 # So the DOE algorithm must be ``"OT_MONTE_CARLO"``, ``"OT_RANDOM"`` or ``"MC"``.
 doe_tool = DOETool(working_directory="monte_carlo_doe_results")
 doe_tool.execute(
-    model=model,
-    parameter_space=space_tool.parameter_space,
-    output_names=output_names,
-    algo="OT_MONTE_CARLO",
-    n_samples=30,
+    inputs=DOEInputs(model=model, parameter_space=space_tool.parameter_space),
+    settings=DOESettings(
+        output_names=output_names, algo="OT_MONTE_CARLO", n_samples=30
+    ),
 )
 
 # %%
@@ -215,8 +223,9 @@ doe_tool.execute(
 # i.e. the HSIC indices normalized between 0 and 1.
 tool = SensitivityTool(working_directory="hsic_from_doe_results")
 tool.execute(
-    doe_result=doe_tool.result,
-    output_names=output_names,
-    sensitivity_algo="HSICAnalysis",
+    inputs=SensitivityToolInputs(doe_result=doe_tool.result),
+    settings=SensitivityToolSettings(
+        output_names=output_names, sensitivity_algo="HSICAnalysis"
+    ),
 )
 tool.result.get_indices_dataframe()

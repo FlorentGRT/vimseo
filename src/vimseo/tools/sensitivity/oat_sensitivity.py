@@ -215,6 +215,18 @@ class OATSensitivityTool(BaseAnalysisTool):
         ]
         self.result.center = _split(center, input_names, input_sizes)
         self.result.input_steps = _split(steps_plus, input_names, input_sizes)
+        zero_center_names = self.result.get_zero_center_names()
+        if zero_center_names:
+            LOGGER.warning(
+                "The center of %s is zero: its step is not relative to its center "
+                "but derived from its standard deviation, its bounds or the absolute "
+                "fallback_step, so its OAT indices are not comparable with those of "
+                "the other inputs and may mislead the ranking.",
+                zero_center_names,
+            )
+            self.result.metadata.report["inputs_with_non_relative_step"] = (
+                zero_center_names
+            )
 
         indices: OATIndices = {}
         for output_name in output_names:
@@ -271,7 +283,7 @@ class OATSensitivityTool(BaseAnalysisTool):
 
         The bars show the variations of the output from the center of the star
         when each input component varies alone,
-        sorted by decreasing absolute ``delta_f``.
+        sorted by decreasing absolute centered variation ``delta_f``.
 
         Args:
             output_names: The names of the outputs.
@@ -336,10 +348,11 @@ def _create_tornado(
     # The most influential input is at the top.
     input_names = result.sort_input_variables(output_name, component)[::-1]
     figure = go.Figure()
-    sides = [("delta_f_plus", "+ step")]
+    # Explicit colors: a "+ step" bar can lie on the negative side.
+    sides = [("delta_f_plus", "+ step", "#1f77b4")]
     if result.two_sided:
-        sides.append(("delta_f_minus", "- step"))
-    for index_name, name in sides:
+        sides.append(("delta_f_minus", "- step", "#d62728"))
+    for index_name, name, color in sides:
         values = result.get_indices_dataframe(index_name)[label]
         figure.add_trace(
             go.Bar(
@@ -347,6 +360,7 @@ def _create_tornado(
                 y=input_names,
                 orientation="h",
                 name=name,
+                marker_color=color,
             )
         )
 

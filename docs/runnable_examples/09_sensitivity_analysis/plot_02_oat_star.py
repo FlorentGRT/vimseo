@@ -50,7 +50,11 @@ from vimseo import EXAMPLE_RUNS_DIR
 from vimseo.api import activate_logger
 from vimseo.api import create_model
 from vimseo.core.model_settings import IntegratedModelSettings
+from vimseo.tools.doe.doe import DOEInputs
+from vimseo.tools.doe.doe import DOESettings
 from vimseo.tools.doe.doe import DOETool
+from vimseo.tools.sensitivity.oat_sensitivity import OATSensitivityInputs
+from vimseo.tools.sensitivity.oat_sensitivity import OATSensitivitySettings
 from vimseo.tools.sensitivity.oat_sensitivity import OATSensitivityTool
 from vimseo.tools.space.space_tool import SpaceTool
 
@@ -112,7 +116,11 @@ print(space_tool.parameter_space)
 #   the step of a component is $\delta|x_{0,i}|$.
 #   If the center is zero, the step is $\delta\sigma_i$ for a random variable,
 #   $\delta$ times the range of the bounds if both are defined,
-#   and ``fallback_step`` otherwise,
+#   and ``fallback_step`` otherwise.
+#   With a relative step, the indices do not depend on the magnitude of the inputs.
+#   An input whose center is zero gets a step that is not relative to its center,
+#   so its indices are not comparable with those of the others
+#   (a warning is logged),
 # - ``two_sided``: whether to vary each component on both sides of the center
 #   (default) or only on the positive side ($d+1$ evaluations).
 #
@@ -128,14 +136,23 @@ print(space_tool.parameter_space)
 output_names = ["reaction_forces", "dplt_at_force_location", "maximum_dplt"]
 tool = OATSensitivityTool(working_directory="oat_sensitivity_results")
 tool.execute(
-    model=model,
-    parameter_space=space_tool.parameter_space,
-    output_names=output_names,
-    center={"height": 41.0},
-    relative_step=0.02,
+    inputs=OATSensitivityInputs(
+        model=model, parameter_space=space_tool.parameter_space
+    ),
+    settings=OATSensitivitySettings(
+        output_names=output_names, center={"height": 41.0}, relative_step=0.02
+    ),
 )
 tool.save_results()
 print(tool.result)
+
+# %%
+# The inputs are ranked by decreasing absolute centered variation ``delta_f``.
+# The reaction force of the cantilever is proportional to
+# $h^3/(r L)^3$, where $h$ is the ``height``, $L$ the ``length``
+# and $r$ the ``relative_dplt_location``:
+# for the same relative step, these three inputs are equally influential
+# to first order, hence their nearly equal ``delta_f``.
 
 # %%
 # The indices are, for each output and input component:
@@ -166,15 +183,16 @@ figures["tornado_reaction_forces"]
 # Here, a one-sided star.
 doe_tool = DOETool(working_directory="star_doe_results")
 doe_tool.execute(
-    model=model,
-    parameter_space=space_tool.parameter_space,
-    output_names=output_names,
-    algo="StarDOE",
-    algo_settings={
-        "center": {"height": 41.0},
-        "relative_step": 0.02,
-        "two_sided": False,
-    },
+    inputs=DOEInputs(model=model, parameter_space=space_tool.parameter_space),
+    settings=DOESettings(
+        output_names=output_names,
+        algo="StarDOE",
+        algo_settings={
+            "center": {"height": 41.0},
+            "relative_step": 0.02,
+            "two_sided": False,
+        },
+    ),
 )
 doe_tool.result.dataset
 
@@ -184,5 +202,5 @@ doe_tool.result.dataset
 # This result records the DOE algorithm, which the tool checks,
 # and its settings, from which the tool reads whether the star is two-sided.
 tool = OATSensitivityTool(working_directory="oat_from_doe_results")
-tool.execute(doe_result=doe_tool.result)
+tool.execute(inputs=OATSensitivityInputs(doe_result=doe_tool.result))
 tool.result.get_indices_dataframe("gradient")

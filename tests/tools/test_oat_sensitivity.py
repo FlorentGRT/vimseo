@@ -77,7 +77,14 @@ def test_indices(oat_tool):
     assert_allclose(indices["delta_f"]["y1"][0]["x1_maximum_only"], [0.0])
     assert result.sort_input_variables("y1") == ["x1", "x1_maximum_only"]
     assert len(result.dataset) == 5
-    assert "x1" in str(result)
+    text = str(result)
+    assert "by decreasing absolute centered variation delta_f:" in text
+    assert "For output y1[0]: x1 (0.05), x1_maximum_only (0)." in text
+    # The index blocks are separated by a blank line and their tables are indented.
+    assert "\n\nIndex delta_f_plus:\n   " in text
+    assert result.get_zero_center_names() == []
+    assert "Warning:" not in text
+    assert "inputs_with_non_relative_step" not in result.metadata.report
 
 
 def _prepare_star_doe(parameter_space, **algo_settings):
@@ -245,6 +252,11 @@ def test_zero_output_at_center(tmp_wd, caplog):
         tool.result.indices["relative_delta_f"]["y4"][0]["x3"], [float("nan")] * 3
     )
     assert "The output y4 is zero at the center of the star" in caplog.text
+    # The step of x3[2], whose center is zero, is not relative to its center.
+    assert "The center of ['x3[2]'] is zero: its step is not relative" in caplog.text
+    result = tool.result
+    assert result.metadata.report["inputs_with_non_relative_step"] == ["x3[2]"]
+    assert "Warning: the steps of ['x3[2]'] are not relative" in str(result)
 
 
 def test_serialization(oat_tool):
@@ -266,6 +278,9 @@ def test_plot(oat_tool):
         "+ step",
         "- step",
     ]
+    colors = [trace.marker.color for trace in figures["tornado_y1"].data]
+    assert None not in colors
+    assert colors[0] != colors[1]
     assert (oat_tool.working_directory / "tornado_y1.html").is_file()
 
 
