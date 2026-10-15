@@ -39,9 +39,16 @@ class MockFaultyRunPost_LC1(PostProcessor):
     Mimics a solver-specific postprocessor (e.g. Abaqus) that overrides
     :meth:`_can_postprocess` to look for a result file in the job directory, and
     whose ``_run`` follows the pattern described on
-    :attr:`.PostProcessor.POSTPROCESS_DESPITE_FAULTY_RUN`: fall back to NaN
-    outputs immediately if the run failed and opt-in is off, otherwise only fall
-    back if the job directory turns out not to be usable.
+    :attr:`.PostProcessor.POSTPROCESS_DESPITE_FAULTY_RUN`.
+
+    A failure of the RUN stage (i.e. the previous component returned an error) is
+    simulated by setting the input ``run_succeeds`` to False. The outputs are then:
+    - RUN succeeded: ``y1`` and ``y2`` are computed normally.
+    - RUN failed and the flag is False: all outputs are NaN.
+    - RUN failed, the flag is True, but :meth:`_can_postprocess` finds no result
+      file in the job directory: all outputs are NaN.
+    - RUN failed, the flag is True and the result file exists: partial recovery,
+      ``y1`` is computed and ``y2`` is NaN.
     """
 
     USE_JOB_DIRECTORY = True

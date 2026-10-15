@@ -94,9 +94,9 @@ class PostProcessor(ExternalSoftwareComponent):
         """Whether the job directory contains what postprocessing needs (e.g. a
         result file).
 
-        Base implementation assumes it does; solver-specific subclasses should
-        override this (e.g. checking for an ODB file for Abaqus). Used by
-        :attr:`POSTPROCESS_DESPITE_FAULTY_RUN`.
+        Base implementation assumes the run can be post-processed; solver-specific
+        subclasses should override this method (e.g. checking for an ODB file for
+        Abaqus), and consider its relation with :attr:`POSTPROCESS_DESPITE_FAULTY_RUN`.
         """
         return True
 
