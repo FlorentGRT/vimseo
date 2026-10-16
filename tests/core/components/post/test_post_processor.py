@@ -18,7 +18,8 @@
 The check of the output keys against the output grammar uses a minimal fake
 post-processor.
 
-PostProcessor.POSTPROCESS_DESPITE_FAULTY_RUN / _can_postprocess(), and the resulting
+The generic PostProcessor._run logic (POSTPROCESS_DESPITE_FAULTY_RUN,
+_is_run_faulty(), _can_postprocess(), _postprocess()), and the resulting
 _generate_nan_outputs()/_generate_failed_output_data() behavior, are exercised
 end-to-end through the MockFaultyRunPost mock model rather than by calling the
 private methods directly.

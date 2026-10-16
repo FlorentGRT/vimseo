@@ -56,6 +56,11 @@ and this project adheres to
   the model cache. A simulation retrieved from the cache keeps the identifiers of the
   run which created it. The simulations executed by a thread or a process pool
   started during a tool run are not recorded.
+- `PostProcessor.POSTPROCESS_DESPITE_FAULTY_RUN`: a post-processor can opt in to
+  postprocess a faulty run, provided that `_can_postprocess()` finds what it needs
+  in the job directory.
+- `solver_utilities.evaluate_modulus_10_50()` (strain- or stress-based interval)
+  and `solver_utilities.evaluate_modulus_e005_e025()`.
 
 ## Changed
 
@@ -165,6 +170,12 @@ and this project adheres to
   (`https://vimseo.github.io/vimseo/0.1.7/`), the last one also under `latest`, and
   `main` under `develop`. The links of the README to the documentation point to
   `latest`; the deep links to the unversioned documentation are broken.
+- `PostProcessor._run` is now generic: it handles the faulty-run logic from the
+  `_is_run_faulty()` and `_can_postprocess()` hooks, and delegates the actual
+  postprocessing to `_postprocess()`, which subclasses implement instead of `_run`.
+- `PostProcessor.evaluate_modulus_10_50()` and `evaluate_modulus_e005_e025()` are
+  removed, use their `solver_utilities` counterparts. The `Modulus1050` and
+  `ModulusE005E025` direct measures use them too.
 
 ## Fixed
 
