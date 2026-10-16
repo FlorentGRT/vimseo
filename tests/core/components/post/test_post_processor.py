@@ -13,10 +13,11 @@
 # along with this program; if not, write to the Free Software Foundation,
 # Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-"""Tests for PostProcessor.POSTPROCESS_DESPITE_FAULTY_RUN / _can_postprocess(), and
-for the resulting _generate_nan_outputs()/_generate_failed_output_data() behavior,
-exercised end-to-end through the MockFaultyRunPost mock model rather than by
-calling the private methods directly.
+"""Tests for the generic PostProcessor._run logic (POSTPROCESS_DESPITE_FAULTY_RUN,
+_is_run_faulty(), _can_postprocess(), _postprocess()), and for the resulting
+_generate_nan_outputs()/_generate_failed_output_data() behavior, exercised
+end-to-end through the MockFaultyRunPost mock model rather than by calling the
+private methods directly.
 """
 
 from __future__ import annotations

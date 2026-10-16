@@ -37,12 +37,14 @@ class MockFaultyRunPost_LC1(PostProcessor):
     """A standalone PostProcessor exercising ``POSTPROCESS_DESPITE_FAULTY_RUN``.
 
     Mimics a solver-specific postprocessor (e.g. Abaqus) that overrides
-    :meth:`_can_postprocess` to look for a result file in the job directory, and
-    whose ``_run`` follows the pattern described on
-    :attr:`.PostProcessor.POSTPROCESS_DESPITE_FAULTY_RUN`.
+    :meth:`_is_run_faulty` and :meth:`_can_postprocess` (looking for a result file in
+    the job directory), and only implements :meth:`_postprocess`: the decision to
+    postprocess is left to :meth:`.PostProcessor._run`.
 
     A failure of the RUN stage (i.e. the previous component returned an error) is
-    simulated by setting the input ``run_succeeds`` to False. The outputs are then:
+    simulated by setting the input ``run_succeeds`` to False, and the result file
+    it may leave in the job directory by ``result_file_written``. The outputs are
+    then:
     - RUN succeeded: ``y1`` and ``y2`` are computed normally.
     - RUN failed and the flag is False: all outputs are NaN.
     - RUN failed, the flag is True, but :meth:`_can_postprocess` finds no result
@@ -69,18 +71,21 @@ class MockFaultyRunPost_LC1(PostProcessor):
         })
         self.default_input_data.update(default_inputs)
 
+    def _run(self, input_data):
+        # Simulate the result file that the RUN stage would have left in the job
+        # directory, before PostProcessor._run checks it.
+        if bool(input_data["result_file_written"][0]):
+            (self.job_directory / RESULT_FILE_NAME).write_text(str(input_data["x1"][0]))
+        return super()._run(input_data)
+
+    def _is_run_faulty(self, input_data) -> bool:
+        return not bool(input_data["run_succeeds"][0])
+
     def _can_postprocess(self) -> bool:
         return (self.job_directory / RESULT_FILE_NAME).exists()
 
-    def _run(self, input_data):
-        run_succeeds = bool(input_data["run_succeeds"][0])
-        if bool(input_data["result_file_written"][0]):
-            (self.job_directory / RESULT_FILE_NAME).write_text(str(input_data["x1"][0]))
-
-        if not run_succeeds:
-            if not self.POSTPROCESS_DESPITE_FAULTY_RUN or not self._can_postprocess():
-                return self._generate_failed_output_data()
-
+    def _postprocess(self, input_data):
+        if self._is_run_faulty(input_data):
             # Partial recovery: y1 can still be derived from the result file,
             # but y2 needs data that the faulty run never produced.
             return self._generate_nan_outputs(
