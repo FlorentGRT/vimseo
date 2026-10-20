@@ -208,12 +208,15 @@ tool.execute(
 tool.result.get_indices_dataframe("sigma")
 
 # %%
-# A HSIC analysis requires samples that are independent and identically
-# distributed (i.i.d.) according to the probability distribution of the parameter
-# space, i.e. a Monte Carlo sampling.
-# A Latin Hypercube Sampling or a quasi Monte Carlo sequence is not suitable:
-# its samples are not independent, which biases the HSIC estimators.
-# So the DOE algorithm must be ``"OT_MONTE_CARLO"``, ``"OT_RANDOM"`` or ``"MC"``.
+# A HSIC analysis requires samples that are independent and distributed
+# according to the probability distribution of the parameter space,
+# i.e. a Monte Carlo sampling (``"OT_MONTE_CARLO"``, ``"OT_RANDOM"`` or ``"MC"``)
+# or a Latin Hypercube Sampling that is not optimized
+# (``"OT_LHS"``, ``"PYDOE_LHS"`` without ``criterion``
+# or ``"LHS"`` without ``optimization``).
+# An optimized Latin Hypercube Sampling or a quasi Monte Carlo sequence
+# is not suitable: it spreads its samples, which are then not independent
+# and bias the HSIC estimators.
 doe_tool = DOETool(working_directory="monte_carlo_doe_results")
 doe_tool.execute(
     inputs=DOEInputs(model=model, parameter_space=space_tool.parameter_space),
@@ -235,11 +238,27 @@ tool.execute(
 tool.result.get_indices_dataframe()
 
 # %%
+# The HSIC indices rank the inputs.
+# The analysis also tests, for each input and output,
+# the hypothesis that the output is independent of the input.
+# A p-value below a significance level, e.g. 5%, rejects this hypothesis:
+# the input is influential.
+# Above it, the hypothesis cannot be rejected
+# and the input can be discarded, e.g. to reduce the dimension of the problem,
+# even when the indices do not rank the inputs clearly.
+# The p-values estimated by permutations do not rely on an asymptotic
+# approximation, contrary to the ``"p_value_asymptotic"`` ones,
+# which require many samples:
+tool.result.get_indices_dataframe("p_value_permutation")
+
+# %%
 # Using runs searched in an MLflow archive
 # ----------------------------------------
 # The samples of a HSIC analysis do not have to come from a DOE:
 # any dataset of runs can be passed as ``dataset``,
-# e.g. runs gathered over several studies and searched in an archive.
+# e.g. runs gathered over several studies and searched in an archive,
+# as long as its input samples are independent
+# and distributed according to the probability distribution of the inputs.
 # Here, the runs are archived in [MLflow](https://mlflow.org).
 # The model archives its runs in the experiment ``"hsic_samples"``.
 # Its cache only keeps the last evaluation in memory,
@@ -299,8 +318,9 @@ dataset
 
 # %%
 # The dataset is passed to the HSIC analysis.
-# Its samples must still be independent and distributed according to the probability distribution
-# of the inputs, which the tool cannot check, hence a warning.
+# Its samples must still be independent and distributed
+# according to the probability distribution of the inputs,
+# which the tool cannot check, hence a warning.
 # The tool wraps the dataset into a DOE result
 # whose DOE algorithm is ``"Unstructured"``;
 # like a DOE executed by the tool or prepared in advance,

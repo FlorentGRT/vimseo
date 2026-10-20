@@ -283,14 +283,20 @@ def test_hsic_prepared_doe(tmp_wd, parameter_space):
     ("sensitivity_algo", "expected_algos"),
     [
         ("Morris", "'MorrisDOE'"),
-        ("HSIC", "'OT_MONTE_CARLO' or 'OT_RANDOM' or 'MC' or 'Unstructured'"),
+        (
+            "HSIC",
+            (
+                "'OT_MONTE_CARLO' or 'OT_RANDOM' or 'MC' or 'OT_LHS' or 'PYDOE_LHS' or "
+                "'LHS' or 'Unstructured'"
+            ),
+        ),
     ],
 )
 def test_prepared_doe_unsuitable_algo(
     tmp_wd, parameter_space, sensitivity_algo, expected_algos
 ):
-    """Check that an analysis rejects a DOE whose algorithm is not suitable, here a
-    Latin Hypercube Sampling."""
+    """Check that an analysis rejects a DOE whose algorithm is not suitable, here an
+    optimized Latin Hypercube Sampling."""
     with pytest.raises(
         ValueError,
         match=re.escape(
@@ -517,3 +523,59 @@ def test_save_prepared_doe(tmp_wd, parameter_space):
     assert tool._subtools["DOETool"].result is doe_result
     tool.save_results()
     assert (tool.working_directory / "DOETool" / "DOETool_result.hdf5").is_file()
+
+
+@pytest.mark.parametrize(
+    ("algo", "algo_settings"),
+    [("OT_LHS", {}), ("PYDOE_LHS", {}), ("LHS", {})],
+)
+def test_hsic_plain_lhs(tmp_wd, parameter_space, algo, algo_settings):
+    """Check that a HSIC analysis accepts a Latin Hypercube Sampling that is not
+    optimized."""
+    tool = SensitivityTool()
+    tool.execute(
+        inputs=SensitivityToolInputs(
+            doe_result=_prepare_doe(parameter_space, algo, 10, ["y1"], **algo_settings)
+        ),
+        settings=SensitivityToolSettings(sensitivity_algo="HSIC"),
+    )
+    assert set(tool.result.indices.hsic["y1"][0]) == {"x1", "x1_maximum_only"}
+
+
+@pytest.mark.parametrize(
+    ("algo", "algo_settings", "name", "value"),
+    [
+        ("PYDOE_LHS", {"criterion": "maximin"}, "criterion", "maximin"),
+        ("LHS", {"optimization": "random-cd"}, "optimization", "random-cd"),
+    ],
+)
+def test_hsic_optimized_lhs(tmp_wd, parameter_space, algo, algo_settings, name, value):
+    """Check that a HSIC analysis rejects an optimized Latin Hypercube Sampling."""
+    doe_result = _prepare_doe(parameter_space, algo, 10, ["y1"], **algo_settings)
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "The sensitivity analysis 'HSIC' requires a Latin Hypercube Sampling "
+            f"that is not optimized, whereas the setting '{name}' of '{algo}' "
+            f"is '{value}'."
+        ),
+    ):
+        SensitivityTool().execute(
+            inputs=SensitivityToolInputs(doe_result=doe_result),
+            settings=SensitivityToolSettings(sensitivity_algo="HSIC"),
+        )
+
+
+def test_hsic_p_values(tmp_wd, parameter_space):
+    """Check that the p-values of the HSIC analysis can be tabulated."""
+    tool = SensitivityTool()
+    tool.execute(
+        inputs=SensitivityToolInputs(
+            doe_result=_prepare_doe(parameter_space, "OT_MONTE_CARLO", 10, ["y1"])
+        ),
+        settings=SensitivityToolSettings(sensitivity_algo="HSIC"),
+    )
+    for name in ["p_value_permutation", "p_value_asymptotic"]:
+        table = tool.result.get_indices_dataframe(name)
+        assert list(table.index) == ["x1", "x1_maximum_only"]
+        assert ((table >= 0) & (table <= 1)).all().all()
