@@ -159,7 +159,7 @@ tool.result.get_indices_dataframe()
 
 # %%
 # Standard plots of a Morris analysis can be shown:
-# a radar plot of the indices, a bar plot and a ($\sigma$, $\mu^*$) plot
+# a radar plot of the indices, a bar plot and a ($\mu^*$, $\sigma$) plot
 # for each output.
 # Here, the interactive bar plot:
 figures = tool.plot_results(
