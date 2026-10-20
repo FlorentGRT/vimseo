@@ -299,7 +299,7 @@ dataset
 
 # %%
 # The dataset is passed to the HSIC analysis.
-# Its samples must still be i.i.d. according to the probability distribution
+# Its samples must still be independent and distributed according to the probability distribution
 # of the inputs, which the tool cannot check, hence a warning.
 # The tool wraps the dataset into a DOE result
 # whose DOE algorithm is ``"Unstructured"``;
