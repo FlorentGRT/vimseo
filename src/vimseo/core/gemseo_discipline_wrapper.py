@@ -33,6 +33,22 @@ if TYPE_CHECKING:
     from gemseo.core.discipline.discipline_data import DisciplineData
     from gemseo.typing import StrKeyMapping
 
+# ------------------------------------------------------------------------------
+# WARNING: temporary backport of GEMSEO ``forbid_extra_output_names``.
+#
+# - At the time of writing (October 2026), VIMSEO is based on GEMSEO 6.x
+#   (``gemseo >= 6.3.3, < 7``), which does not provide ``forbid_extra_output_names``.
+# - This feature was added to GEMSEO by MR !2821 (issue gemseo#2011), merged in
+#   ``develop`` and expected in GEMSEO 7.
+# - Until the minimal GEMSEO version required by VIMSEO ships it, it is
+#   re-implemented below with the same name, default and semantics:
+#   ``forbid_extra_output_names``, ``_get_extra_output_names`` and the fallback
+#   ``_execute``.
+# - Once it does, delete this re-implementation: ``_GEMSEO_HAS_FORBID_EXTRA_OUTPUT_NAMES``,
+#   the attribute set in ``__init__``, ``_get_extra_output_names``, ``_execute``
+#   and the ``try/except`` import of ``InvalidDataError``.
+#   The callers (e.g. ``PostProcessor``) do not need to change.
+# ------------------------------------------------------------------------------
 _GEMSEO_HAS_FORBID_EXTRA_OUTPUT_NAMES = hasattr(IO, "get_extra_output_names")
 """Whether the installed GEMSEO natively provides ``forbid_extra_output_names``."""
 
@@ -61,8 +77,7 @@ class GemseoDisciplineWrapper(Discipline):
         if not _GEMSEO_HAS_FORBID_EXTRA_OUTPUT_NAMES:
             self.forbid_extra_output_names = False
 
-    # TODO remove _execute and _get_extra_output_names once the minimal gemseo
-    # version ships forbid_extra_output_names (GEMSEO MR !2821).
+    # TODO remove: temporary backport, see the WARNING at the top of this module.
     def _get_extra_output_names(self, output_data: StrKeyMapping) -> set[str]:
         """Return the names of ``output_data`` that ``update_output_data`` would drop.
 
@@ -80,7 +95,11 @@ class GemseoDisciplineWrapper(Discipline):
             super()._execute()
             return
 
-        # Mirror of the default ``BaseDiscipline._execute`` plus the strict check.
+        # ``super()._execute()`` is deliberately not called: it ends with
+        # ``io.update_output_data()``, which silently drops the names that are not
+        # in the output grammar, so they could no longer be detected afterwards.
+        # Hence this copy of ``BaseDiscipline._execute`` (GEMSEO 6.3.3), with the
+        # strict check inserted just before ``update_output_data()``.
         io = self.io
         if io.input_grammar.to_namespaced:
             input_data = io.get_input_data(with_namespaces=False)
