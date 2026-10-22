@@ -13,12 +13,13 @@
 # along with this program; if not, write to the Free Software Foundation,
 # Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 """Utility functions for solver interaction."""
+
 import datetime
-import getpass
 import json
 import numpy as np
 from numpy import array
 from numpy import ndarray
+from vimseo.utilities.user import get_user_name
 
 # Python 2/3 compatibility
 try:
@@ -38,10 +39,10 @@ def import_json_inputs(json_input_file):
 
     # TODO factorise this function wih load_job_arguments()
 
-    with open(json_input_file, 'r') as input_file:
+    with open(json_input_file, "r") as input_file:
         inputs = json.loads(input_file.read())
         for k, v in inputs.items():
-            if isinstance(v, unicode): 
+            if isinstance(v, unicode):
                 # unicode strings are casted into strings
                 inputs[k] = str(v)
             if isinstance(v, (list, type(np.array([0.0])))):
@@ -65,7 +66,7 @@ def write_json_dict(output_file, dict_outputs):
         "job_arguments.json")
         dict_outputs: dictionnary of data to be dumped into the json file
     """
-    with open(output_file, 'w') as f:
+    with open(output_file, "w") as f:
         f.write(json.dumps(dict_outputs, indent=4))
 
 
@@ -73,13 +74,15 @@ def write_job_outputs_csv_exhaustive(output_file, dict_scalars, dict_curves):
     """Write an exhaustive CSV output file based on scalars and curves outputs,
     formated for human reading."""
 
-    with open(output_file, 'w') as f:
+    with open(output_file, "w") as f:
         f.write(get_metadata_txt())
 
         # Writing the scalars in the text file
         f.write("\n########################################################\n")
         for key, value in dict_scalars.items():
-            value_format = "{0:.3f}".format(value) if isinstance(value, float) else value
+            value_format = (
+                "{0:.3f}".format(value) if isinstance(value, float) else value
+            )
             f.write(key + " = " + str(value_format) + "\n")
 
         # Writing the curves in the text file
@@ -237,5 +240,5 @@ def time_stamper_formatted():
 def get_metadata_txt():
     """Generate metadata as string (time stamp + user)."""
     return (
-        "## Generated the " + time_stamper_full_text() + "   by  " + getpass.getuser()
+        "## Generated the " + time_stamper_full_text() + "   by  " + get_user_name()
     )

@@ -15,6 +15,7 @@
 
 from __future__ import annotations
 
+from collections import UserList
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
@@ -70,6 +71,11 @@ class Curve:
     def variable_names(self):
         """The (x,y) names of the variables."""
         return tuple(self.__names)
+
+    @property
+    def name(self) -> str:
+        """The name of the curve, ``{y}_vs_{x}``."""
+        return f"{self.__names[1]}_vs_{self.__names[0]}"
 
     @property
     def x(self) -> ndarray:
@@ -244,6 +250,15 @@ class CurveSet:
         abscissa_name, ordinate_name = curve.variable_names
         return cls(Plot(x=abscissa_name, traces=[Trace(y=ordinate_name)]), [curve])
 
+    @property
+    def name(self) -> str:
+        """The name of the figure, see :meth:`.Plot.get_name`."""
+        return self.spec.get_name()
+
+    def __getitem__(self, ordinate_name: str) -> Curve:
+        """Return the curve of a given ordinate variable, see :meth:`select`."""
+        return self.select(ordinate_name)
+
     def select(self, ordinate_name: str) -> Curve:
         """Return the curve of a given ordinate variable.
 
@@ -325,3 +340,25 @@ class CurveSet:
             file_name=file_name or self.spec.get_file_name(),
             fig=fig,
         )
+
+
+class NamedList(UserList):
+    """A list of curves or curve sets, which can also be indexed by their names.
+
+    It is a list: it is iterated over its items, an integer gives an item, and a
+    string gives the item of this :attr:`name`, e.g. ``curves["dplt_vs_dplt_grid"]``.
+    """
+
+    def __getitem__(self, key):
+        if not isinstance(key, str):
+            return super().__getitem__(key)
+        for item in self:
+            if item.name == key:
+                return item
+        msg = f"No item named {key}; the names are {self.names}."
+        raise KeyError(msg)
+
+    @property
+    def names(self) -> list[str]:
+        """The names of the items, in their order."""
+        return [item.name for item in self]

@@ -37,8 +37,10 @@ model = create_model(
 
 In addition, since the layup strongly controls the physics of the
 laminate, it may be interesting to separate the tool results and the
-individual simulations per layup. As a result, you may create the mode
-like this:
+individual simulations per layup. Give the model and the tools the same
+`study_name`, one per layup: they are archived in the same archive, under
+`{directory_archive_root}/{study_name}/` (or in the MLflow experiment
+`{study_name}`), and stay linked to each other.
 
 ```
 from vimseo.api import create_model
@@ -46,10 +48,11 @@ from vimseo.utilities.database import encode
 
 model_name = "OpfmCube"
 load_case = "PST"
+study_name = f"layup{encode(layup)}"
 model = create_model(
     model_name, load_case,
-    cache_file_path=f"layup{encode(layup)}_{model_name}_{load_case}_cache.hdf",
-    root_directory=f"layup{layup}_{model_name}_{laod_case}_runs",
+    cache_file_path=f"{study_name}_{model_name}_{load_case}_cache.hdf",
+    study_name=study_name,
 )
 ```
 
@@ -58,8 +61,11 @@ And create the tool like this:
 ```
 from vimseo.tools.sensitivity.sensitivity import SensitivityTool
 
-tool = SensitivityTool(root_directory=f"layup{layup}_{model_name}_{load_case}")
+tool = SensitivityTool(study_name=study_name)
 ```
+
+The study of a whole script can also be set once, with the environment variable
+`VIMSEO_STUDY_NAME`.
 
 # Running simulations
 

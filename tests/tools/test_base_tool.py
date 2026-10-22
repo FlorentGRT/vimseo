@@ -17,11 +17,14 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import dataclass
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 from gemseo.core.grammars.errors import InvalidDataError
 from gemseo.utils.directory_creator import DirectoryNamingMethod
+from plotly.graph_objs import Figure
 
 from vimseo.tools.base_result import BaseResult
 from vimseo.tools.base_settings import BaseInputs
@@ -32,6 +35,23 @@ from vimseo.tools.mock.mock_tool import MyInputs
 from vimseo.tools.mock.mock_tool import MySettings
 from vimseo.tools.mock.mock_tool import MyTool
 from vimseo.tools.mock.mock_tool import MyToolNoInputs
+from vimseo.tools.result_visualization import BasePlotSettings
+
+
+class PlottedResultSettings(BasePlotSettings):
+    output_names: tuple[str, ...] = ()
+
+
+@dataclass
+class PlottedResult(BaseResult):
+    """A result with a figure per output."""
+
+    _PLOT_SETTINGS: ClassVar[type[PlottedResultSettings]] = PlottedResultSettings
+
+    def _create_figures(self, settings):
+        return {
+            f"figure_{name}": Figure() for name in settings.output_names or ("a", "b")
+        }
 
 
 class InputsOnlyTool(BaseTool):
@@ -180,20 +200,6 @@ def test_result_as_input(tmp_wd, get_options):
     assert tool.options["result"] is result
 
 
-def test_set_plot_uses_plot_factory():
-    """``set_plot`` delegates to the plot factory when one is set."""
-
-    class DummyFactory:
-        def create(self, class_name, **options):
-            return ("plot", class_name, options)
-
-    tool = MyTool()
-    tool._plot_factory = DummyFactory()
-    tool.set_plot("Scatter", color="red")
-    assert tool._plot == ("plot", "Scatter", {"color": "red"})
-    assert tool._plot_class == "Scatter"
-
-
 def test_missing_json_schema_raises():
     """Instantiating a JSON-grammar tool without its schema file raises."""
     with pytest.raises(ValueError, match="json schema does not exist"):
@@ -265,17 +271,36 @@ def test_save_results(
         ).is_file()
 
 
-def test_save_and_load_results_pickle(tmp_wd):
-    """A pickled result can be saved and reloaded from disk."""
+@pytest.mark.parametrize(
+    ("file_format", "prefix", "expected"),
+    [
+        ("hdf5", "", "DOETool_result.hdf5"),
+        ("hdf5", "batch_1", "batch_1_DOETool_result.hdf5"),
+        ("json", "", "DOETool_result.json"),
+    ],
+)
+def test_get_result_file_name(file_format, prefix, expected):
+    assert BaseTool.get_result_file_name("DOETool", file_format, prefix) == expected
+
+
+def test_save_and_load_results_hdf5(tmp_wd):
+    """A result can be saved and reloaded from disk in HDF5 format."""
     tool = MyTool()
     tool.execute(foo="x")
-    tool.save_results(file_format="pickle")
-    path = tool.working_directory / "MyTool_result.pickle"
-    assert path.is_file()
+    tool.save_results()
+    loaded = BaseTool.load_results(tool.working_directory / "MyTool_result.hdf5")
+    assert isinstance(loaded, type(tool.result))
+    assert loaded.metadata.settings == {"foo": "x"}
 
-    loaded = BaseTool.load_results(path)
-    assert isinstance(loaded, BaseResult)
-    assert loaded == tool.result
+
+def test_pickle_format_is_not_supported(tmp_wd):
+    """The results are no longer saved nor loaded in pickle format."""
+    tool = MyTool()
+    tool.execute()
+    with pytest.raises(ValueError, match="File format should be in"):
+        tool.save_results(file_format="pickle")
+    with pytest.raises(ValueError, match="Unknow file format"):
+        BaseTool.load_results(tool.working_directory / "MyTool_result.pickle")
 
 
 def test_save_results_invalid_format_raises(tmp_wd):

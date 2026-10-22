@@ -48,14 +48,16 @@ def test_plot_model(tmp_wd, model, load_case):
     for plot in model.plots:
         assert plot.get_name() in figures
         assert Path(
-            model.archive_manager.job_directory
-            / f"{model.name}_{load_case}_{plot.get_file_name()}"
+            model.archive_manager.job_directory / plot.get_file_name()
         ).is_file()
 
 
 def test_plot_model_multi_curves(tmp_wd):
     """Check the figures holding several lines, a twin axis and a constant line."""
-    model = create_model("MockMultiCurves", "Dummy")
+    # A short archive root: the name of the figure of the energies is long, and the
+    # temporary directories of pytest-xdist too, while Windows limits paths to 260
+    # characters.
+    model = create_model("MockMultiCurves", "Dummy", directory_archive_root="a")
     model.execute()
     figures = model.plot_results()
 
@@ -91,7 +93,7 @@ def test_plot_model_select_variables(tmp_wd):
     """Check that a subset of the lines of a figure can be drawn."""
     model = create_model("MockMultiCurves", "Dummy")
     model.execute()
-    result = ModelResult.from_data(
+    result = ModelResult.from_dict(
         {"inputs": model.get_input_data(), "outputs": model.get_output_data()},
         model=model,
     )

@@ -34,12 +34,13 @@ def archive(tmp_path):
     )
 
 
-def test_uri_and_experiment_and_run_name(archive, tmp_path):
-    """The base archive manager exposes uri, experiment and run-name accessors."""
+def test_uri_and_study_and_run_name(archive, tmp_path):
+    """The base archive manager exposes uri, study and run-name accessors."""
     assert archive.uri == str(tmp_path)
 
-    archive.set_experiment("my_experiment")
-    assert archive.experiment_name == "my_experiment"
+    assert archive.study_name == "default_study"
+    archive.set_study_name("my_study")
+    assert archive.study_name == "my_study"
 
     archive.set_run_name("my_run")
     assert archive.run_name == "my_run"

@@ -21,7 +21,7 @@ conclusion can be followed from the conclusion down to each simulation.
 - **Priority:** Must
 - **Status:** Proposed
 - **Verification:** Test — `tests/storage_management/`.
-- **Satisfied by:** —
+- **Satisfied by:** SPEC-009
 
 ### REQ-STO-002 — A simulation and a tool run are uniquely identified
 
@@ -31,8 +31,8 @@ conclusion can be followed from the conclusion down to each simulation.
 - **Rationale:** Identifiers are the base of every link between archived objects.
 - **Priority:** Must
 - **Status:** Proposed
-- **Verification:** Test.
-- **Satisfied by:** —
+- **Verification:** Test — `tests/core/test_run_ids.py`, `tests/tools/test_tool_run_ids.py`.
+- **Satisfied by:** SPEC-003
 
 ### REQ-STO-003 — A tool result is traceable to the simulations it used
 
@@ -44,7 +44,7 @@ conclusion can be followed from the conclusion down to each simulation.
 - **Priority:** Must
 - **Status:** Proposed
 - **Verification:** Test.
-- **Satisfied by:** —
+- **Satisfied by:** SPEC-003, SPEC-004, SPEC-005
 
 ### REQ-STO-004 — The tool results are archived
 
@@ -55,8 +55,8 @@ conclusion can be followed from the conclusion down to each simulation.
   after the session which produced them.
 - **Priority:** Must
 - **Status:** Proposed
-- **Verification:** Test.
-- **Satisfied by:** —
+- **Verification:** Test — `tests/storage_management/test_tool_archive.py`.
+- **Satisfied by:** SPEC-004, SPEC-005, SPEC-011
 
 ### REQ-STO-005 — A subtool is archived like its parent
 
@@ -67,7 +67,7 @@ conclusion can be followed from the conclusion down to each simulation.
 - **Priority:** Must
 - **Status:** Proposed
 - **Verification:** Test.
-- **Satisfied by:** —
+- **Satisfied by:** SPEC-004, SPEC-005, SPEC-011
 
 ### REQ-STO-006 — An archive does not alter the global state of its backend
 
@@ -78,7 +78,7 @@ conclusion can be followed from the conclusion down to each simulation.
 - **Priority:** Must
 - **Status:** Proposed
 - **Verification:** Test.
-- **Satisfied by:** —
+- **Satisfied by:** SPEC-002, SPEC-005, SPEC-011
 
 ### REQ-STO-007 — The key values of a tool result are searchable
 
@@ -88,4 +88,28 @@ conclusion can be followed from the conclusion down to each simulation.
 - **Priority:** Should
 - **Status:** Proposed
 - **Verification:** Test.
-- **Satisfied by:** —
+- **Satisfied by:** SPEC-005
+
+### REQ-STO-008 — The runs of an archive are grouped by study
+
+- **Statement:** The system shall group the simulations and the tool runs of an archive
+  by study, with the same meaning for every archive manager, and shall find a run from
+  its identifier whatever its study.
+- **Rationale:** Several studies (e.g. one per layup) share an archive, or an MLflow
+  server shared by a team, without mixing their runs nor losing the links between them.
+- **Priority:** Must
+- **Status:** Proposed
+- **Verification:** Test — `tests/storage_management/`.
+- **Satisfied by:** SPEC-011, SPEC-005
+
+### REQ-STO-009 — Archive maintenance is explicit
+
+- **Statement:** No exploration, selection, inspection nor dashboard action shall delete
+  archived runs; deleting runs shall only be possible through an explicit method of the
+  archive manager.
+- **Rationale:** Study scripts deleted duplicate runs silently at each start
+  (`JobBundle.remove_duplicate_jobs(delete_dirs=True)`); archives are evidence.
+- **Priority:** Must
+- **Status:** Proposed
+- **Verification:** Test; Inspection of the verbs of the collection.
+- **Satisfied by:** SPEC-010

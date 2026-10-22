@@ -13,6 +13,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
+**Python environment:** run the tests, the examples and any script with the tox
+environment `.tox/py312/` (`.tox/py312/Scripts/python.exe` on Windows), which holds
+every extra and the dev dependencies with VIMSEO installed in editable mode. Do not use
+`.venv/`: it is not kept in sync with `pyproject.toml` (e.g. it lacks `kaleido`).
+
+```bash
+.tox/py312/Scripts/python.exe -m pytest tests/tools/test_doe.py
+```
+
 **Install (editable, with every extra and the dev dependencies):**
 ```bash
 uv pip install -e ".[all]" --group dev
@@ -85,8 +94,19 @@ All analysis tools inherit from `BaseTool` ([base_tool.py](src/vimseo/tools/base
 
 - Class attributes `_INPUTS` (a `BaseInputs` subclass) and `_SETTINGS` (a `BaseSettings` subclass) define Pydantic models for validation.
 - `execute(inputs=..., settings=...)` accepts instances of those Pydantic models, or falls back to keyword arguments.
-- Results are stored in `tool.result` (a `BaseResult` subclass) and persisted via `tool.save_results()` to HDF5/pickle.
-- `plot_results(result, ...)` produces Plotly figures.
+- Results are stored in `tool.result` (a `BaseResult` subclass) and persisted via `tool.save_results()` to HDF5.
+- A result is visualized without its tool, e.g. once loaded from an archive:
+  `result.plot(**settings)` returns its figures (Plotly or matplotlib) and
+  `result.to_dataframes()` its numerical values as DataFrames. A result class declares
+  its figures in `_create_figures()` and its settings in `_PLOT_SETTINGS`, whose
+  fields are flat and default to "everything"; `get_plot_choices()` gives the names
+  accepted by the settings selecting names.
+- `vimseo.api.load_tool_results(refs)` / `load_model_results(refs)` load one or many
+  results from their references (identifier, `tool-run:` / `run:`, path, `runs:/`,
+  [tool_archive/uri.py](src/vimseo/storage_management/tool_archive/uri.py)) and always
+  return a collection (`ToolResults` / `ModelResults`, [results/collection.py](src/vimseo/results/collection.py));
+  `open_model_results(**archive)` / `open_tool_results` open a whole archive, explored with
+  `filter(query=...)`, `ignoring`, `varying_inputs`, `families(along=...)`, `duplicates`.
 
 **Calling tools:** prefer `tool.execute(inputs=MyToolInputs(...), settings=MyToolSettings(...))`
 (the tool's `_INPUTS` / `_SETTINGS` classes) over keyword arguments, in examples, tests and
@@ -103,6 +123,25 @@ Available tool categories: DOE, sensitivity analysis, calibration, verification 
   ([configuration_settings.py:71](src/vimseo/config/configuration_settings.py)).
 - `"MlflowArchive"` — stores model runs in an MLflow tracking server. Requires the `mlflow`
   extra, and is imported lazily so that the model layer does not depend on mlflow.
+
+The runs are grouped by **study** (`study_name`, default `default_study`, `VIMSEO_STUDY_NAME`):
+a simulation is in `{root}/{study}/{model}/{load_case}/{run_id}/results.json`, written with
+`status=RUNNING` when it starts; in MLflow a study is one experiment and the runs are told apart
+by the tag `vimseo.kind`. The identifiers are time ordered (`{UTC date}_{uuid prefix}`).
+
+The **tool results** are archived separately, by `open_tool_archive()` in
+[tool_archive/__init__.py](src/vimseo/storage_management/tool_archive/__init__.py), selected
+by the `archive_manager` setting of a tool, else `config.tool_archive_manager`, else
+`config.run_archive_manager` (`"none"` disables it; the tests disable it in `conftest.py`):
+- `DirectoryToolArchive` — `{root}/{study}/tools/{tool_name}/{tool_run_id}/` holds the result HDF5
+  and a JSON summary.
+- `MlflowToolArchive` — one MLflow run per tool run in the experiment of the study, the run of a
+  subtool nested in the run of its parent. The result HDF5 and the summary are artifacts,
+  the searchable fields are `vimseo.*` tags and the settings are params.
+
+A tool run is identified by its `tool_run_id` (`result.metadata.tool_run_id`); its simulations
+carry it too. `search_model_results(**archive, query=...)` / `search_tool_runs` list the runs
+without loading them (the query uses the `pandas.DataFrame.query` syntax, with `or`).
 
 Scratch storage is a separate mechanism: `DirectoryScratch`
 ([scratch_storage.py](src/vimseo/storage_management/scratch_storage.py)) is always used and
@@ -143,8 +182,9 @@ All settings classes inherit from `BaseSettings` (Pydantic `BaseModel` with `ext
 |---|---|
 | `dashboard_workflow` | `vimseo.dashboards.workflow.entry_point:main` |
 | `workflow_executor` | `vimseo.workflow.workflow_executor:main` |
-| `dashboard_database_viewer` | `vimseo.dashboards.database_viewer.db_viewer_entry_point:main` |
+| `dashboard_model_results` | `vimseo.dashboards.model_results.entry_point:main` |
 | `dashboard_mlflow` | `vimseo.storage_management.mlflow_ui_entry_point:main` |
+| `visualize_tool_result` | `vimseo.tools.visualize_tool_result:main` |
 
 ### Test structure
 

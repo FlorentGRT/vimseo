@@ -44,9 +44,9 @@ Used once per feature developed without a canvas, e.g. the branch
 1. Generate the canvas from the code:
 
     ```text
-    /spdd-reasons-canvas SPEC-NNN retro-specification of the existing code, do not
+    /spdd-reasons-canvas SPEC-003 retro-specification of the existing code, do not
     change the code. Commits: <subjects of the commits>.
-    @src/vimseo/<key module>.py @src/vimseo/<other key module>.py
+    @src/vimseo/core/run_context.py @src/vimseo/core/base_integrated_model.py
     @docs/specs/index.md
     ```
 
@@ -154,5 +154,27 @@ Adapt the generic guidance of the commands to VIMSEO:
 
 | Spec | Feature | Status | Requirements | Depends on |
 |---|---|---|---|---|
+| SPEC-001 | Serialization in clear | Retro | REQ-SER-001..003, REQ-RES-004, REQ-NFR-001 | — |
+| SPEC-002 | MLflow run archive isolated from the global MLflow state | Retro | REQ-STO-006 | — |
+| SPEC-003 | Identifiers of the simulations and of the tool runs | Retro | REQ-STO-002, REQ-STO-003, REQ-MOD-004 | — |
+| SPEC-004 | Archive of the tool results in local directories (+ iteration 1: symmetric settings, archive manager naming; iteration 2: working directory created on demand) | Draft | REQ-STO-003..005, REQ-TOOL-003, REQ-DEP-002, REQ-NFR-001, REQ-NFR-004, REQ-UX-004 | SPEC-001, SPEC-003 |
+| SPEC-005 | Archive of the tool results in MLflow (+ iteration 1: tool runs in the experiment of their study, SPEC-011) | Draft | REQ-STO-003..008, REQ-DEP-002 | SPEC-002, SPEC-004 |
+| SPEC-006 | Visualize and tabulate a result without its tool | Retro | REQ-RES-001..004, REQ-RES-006, REQ-TOOL-002 | — |
+| SPEC-007 | Load results and simulations from a URI; CLI (+ iteration 1: names of the loading API; iteration 2: `study_name`, URIs of the model results) | Draft | REQ-RES-005, REQ-UX-001, REQ-UX-002, REQ-UX-004 | SPEC-004, SPEC-005, SPEC-006, SPEC-011 |
+| SPEC-008 | Plots declared by the load cases | Retro | REQ-MOD-003 | — |
+| SPEC-009 | `JobBundle`, an explorer of the archived simulations | Retro | REQ-STO-001, REQ-UX-001, REQ-UX-005 | — |
+| SPEC-010 | Data management examples and a symmetric roundtrip of the results (+ iteration 1: the same archive arguments everywhere, model result URIs; iteration 2: shared collection of results, declarative conditions, saved inspections, dashboard) | Draft | REQ-RES-001, REQ-RES-005, REQ-UX-001, REQ-UX-004..008, REQ-STO-009 | SPEC-004, SPEC-006, SPEC-007, SPEC-009, SPEC-011 |
+| SPEC-011 | Studies, the grouping of the simulations and of the tool runs of an archive | Draft | REQ-STO-004..006, REQ-STO-008 | SPEC-002, SPEC-004, SPEC-005, SPEC-007 |
 
-The files are in `spdd/prompt/`, named `SPEC-NNN-*.md`. Add a row for each new canvas.
+The files are in `spdd/prompt/`, named `SPEC-NNN-*.md`. The analyses produced by
+`/spdd-analysis` are in `spdd/analysis/`.
+
+### Commits outside the canvases
+
+Small changes of `feat/result-visualization` which do not deserve a canvas:
+
+| Commit | Change | Requirement |
+|---|---|---|
+| `197005b6` | Job scheduler executors read the convergence files in their job directory | — |
+| `9cdc0594` | The dashboards show the VIMSEO logo | — |
+| `b5446693` | Every dashboard is checked to open without error | REQ-UX-003 |

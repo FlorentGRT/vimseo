@@ -163,6 +163,12 @@ class Plot(metaclass=GoogleDocstringInheritanceMeta):
     file_name: str = ""
     """The name of the file to save the figure to. Defaults to :meth:`.get_name`."""
 
+    name: str = ""
+    """The name of the figure, its key in the figures of a result.
+
+    Defaults to a name derived from the title or the variables, see :meth:`get_name`.
+    """
+
     @classmethod
     def from_variable_names(cls, variable_names: tuple[str, ...]) -> Plot:
         """Create a plot from a tuple of variable names.
@@ -212,11 +218,14 @@ class Plot(metaclass=GoogleDocstringInheritanceMeta):
     def get_name(self) -> str:
         """Return a name for the figure, used as a figure key and as a file name.
 
-        The name is derived from the title when there is one. Otherwise it is
+        It is :attr:`name` when it is set. Otherwise, the name is derived from the
+        title when there is one. Otherwise it is
         derived from the variable names, in which case only the first ordinate is
         used, so that the name of a figure holding many lines stays short enough
         for the file systems limiting the length of the paths.
         """
+        if self.name:
+            return self.name
         if self.title:
             return self.title.lower().replace(" ", "_")
         ordinates = self.variable_traces

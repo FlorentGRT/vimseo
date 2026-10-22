@@ -31,12 +31,14 @@ from numpy.testing import assert_array_equal
 from pandas import DataFrame
 
 from vimseo.api import create_model
+from vimseo.api import search_tool_runs
 from vimseo.tools.base_result import assert_results_equal
 from vimseo.tools.verification.solution_verification import Analysis
 from vimseo.tools.verification.solution_verification import (
     DiscretizationSolutionVerification,
 )
 from vimseo.tools.verification.verification_result import SolutionVerificationResult
+from vimseo.utilities.test_utils import check_result_visualization
 
 ELEMENT_SIZES = [0.45, 0.25, 0.15, 0.1]
 ELEMENT_SIZE_RATIO = 1.2
@@ -141,17 +143,17 @@ def test_convergence_versus_n_dof(tmp_wd):
 
 def test_plot(tmp_wd, convergence_verificator):
     """Check that the convergence verification plot are written on disk."""
-    convergence_verificator.plot_results(
-        convergence_verificator.result,
-        directory_path=Path.cwd(),
-        save=True,
-        show=False,
-    )
-    assert Path("convergence_a_h_versus_h.html").is_file()
-    assert Path("convergence_fit_a_h.html").is_file()
-    assert Path("a_h_error_versus_h.html").is_file()
-    assert Path("a_h_error_versus_cpu_time.html").is_file()
-    assert Path("a_h_error_versus_element_size.html").is_file()
+    figures = convergence_verificator.result.plot(save=True)
+    expected_keys = [
+        "convergence_cross_validation",
+        "convergence_fit",
+        "error_versus_element_size",
+        "relative_error_versus_element_size",
+        "relative_error_versus_cpu_time",
+    ]
+    assert set(figures) == set(expected_keys)
+    for key in expected_keys:
+        assert Path(f"{key}.html").is_file()
 
 
 def test_repr(tmp_wd, convergence_verificator):
@@ -204,8 +206,9 @@ def test_from_data(tmp_wd):
         ("outputs", "y1", 0): ones(5),
         ("outputs", "y2", 0): ones(5),
     })
+    archive = {"archive_manager": "DirectoryArchive", "directory_archive_root": "a"}
     verificator = DiscretizationSolutionVerification(
-        directory_naming_method=DirectoryNamingMethod.NUMBERED,
+        directory_naming_method=DirectoryNamingMethod.NUMBERED, **archive
     )
     verificator.execute(
         element_size_variable_name="h",
@@ -213,7 +216,13 @@ def test_from_data(tmp_wd):
         simulated_data=df,
         observed_output_names=["y1"],
     )
-    verificator.plot_results(verificator.result, save=True, show=False)
+    verificator.result.plot(directory_path=verificator.working_directory, save=True)
+    # Without model, the result is archived without model.
+    assert verificator.result.metadata.model is None
+    (summary,) = search_tool_runs(
+        **archive, tool_name="DiscretizationSolutionVerification"
+    )
+    assert summary["model"] is None
 
 
 def test_serialization(tmp_wd, convergence_verificator):
@@ -329,7 +338,22 @@ def test_converged_estimates_populated_when_richardson_fails(tmp_wd):
     errors = result.element_wise_metrics.get_view(variable_names="a_h").to_numpy()
     assert isfinite(errors).all()
     # And the Richardson-free plot can still be produced.
-    verificator.plot_results(
-        verificator.result, directory_path=Path.cwd(), save=True, show=False
-    )
-    assert Path("convergence_fit_a_h.html").is_file()
+    verificator.result.plot(save=True)
+    assert Path("convergence_fit.html").is_file()
+
+
+def test_result_visualization(tmp_wd, convergence_verificator):
+    """Check that a solution verification result can be visualized once loaded from a
+    file."""
+    check_result_visualization(convergence_verificator.result, "visualization")
+    tables = convergence_verificator.result.to_dataframes()
+    assert "extrapolated_value" in tables["extrapolation"].index
+    assert "convergence_order" in tables["extrapolation"].index
+    assert "extrapolated_value" in tables["cross_validation"].columns
+
+
+def test_key_values(tmp_wd, convergence_verificator):
+    """The extrapolated quantities summarize a solution verification."""
+    key_values = convergence_verificator.result.get_key_values()
+    assert "extrapolated_value" in key_values
+    assert "convergence_order" in key_values

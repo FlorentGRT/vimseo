@@ -261,14 +261,9 @@ def tan_point(
         + 2 * jnp.real(s1**2 * phi1_0 + s2**2 * phi2_0)
         + 2 * jnp.real(s1**2 * phi1_1 + s2**2 * phi2_1)
     )
-    f1 = (
-        2 * jnp.real(phi1_0 + phi2_0)
-        + p[1]
-        + 2 * jnp.real(phi1_1 + phi2_1)
-    )
-    f2 = (
-        -2 * jnp.real(s1 * phi1_0 + s2 * phi2_0)
-        - 2 * jnp.real(s1 * phi1_1 + s2 * phi2_1)
+    f1 = 2 * jnp.real(phi1_0 + phi2_0) + p[1] + 2 * jnp.real(phi1_1 + phi2_1)
+    f2 = -2 * jnp.real(s1 * phi1_0 + s2 * phi2_0) - 2 * jnp.real(
+        s1 * phi1_1 + s2 * phi2_1
     )
     flux = jnp.stack([f0, f1, f2])
 

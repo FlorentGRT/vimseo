@@ -168,6 +168,9 @@ class DOETool(BaseAnalysisTool):
         **options,
     ) -> DOEResult:
         model = options["model"]
+        self.result.metadata.model = getattr(model, "description", None)
+        # The figures of the model, for the visualization of the result.
+        self.result.plots = list(getattr(model, "plots", []))
         algo_settings = dict(options["algo_settings"])
         # Some DOE algorithms, e.g. the ones of the OAT methods,
         # derive their number of samples from their other settings.

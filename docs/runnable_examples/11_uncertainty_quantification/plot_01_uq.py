@@ -82,15 +82,11 @@ print(space_tool.get_available_space_builders())
 # of the distribution, which is :math:`\pm cov * central\_value`.
 # We consider independent random variables triangularly distributed:
 #
-# .. note::
+# !!! note
 #
-#    A triangular distribution is a probability distribution
-#    defined by a lower bound, a mode and an upper bound:
-#
-#    .. figure:: /_examples/uq/_static/triangular_distribution.png
-#
-#       Probability density function of the random variable *friction*
-#       distributed as a triangular distribution :math:`\mathcal{T}(0.1, 0.2, 0.3)`.
+#     A triangular distribution is a probability distribution
+#     defined by a lower bound, a mode and an upper bound,
+#     e.g. $\mathcal{T}(0.1, 0.2, 0.3)$.
 #
 # Here, the space of parameters is built in two steps.
 # First, considering all input variables of the model except "relative_dplt_location".
@@ -122,15 +118,15 @@ parameter_space = space_tool.parameter_space
 print(space_tool.get_available_distributions())
 
 # %%
-# .. note::
+# !!! note
 #
-#    For a one-shot use,
-#    we can also instantiate a uncertain space
-#    directly from :class:`ParameterSpace`.
+#     For a one-shot use,
+#     we can also instantiate a uncertain space
+#     directly from `ParameterSpace`:
 #
-#    .. code::
-#
-#       from gemseo.api import create_parameter_space
+#     ```python
+#     from gemseo import create_parameter_space
+#     ```
 #
 #       parameter_space = create_parameter_space()
 #       for (name, minimum, mode, maximum) in [
@@ -196,15 +192,15 @@ fig
 # For instance, the :class:`~.SpaceTool` provides a scatter matrix plot
 # where the diagonal blocks represent the histograms of the random variables
 # while the other blocks represents the value of a variable versus another.
-space_tool.plot_results(space_tool.result, save=False, show=True, n_samples=200)
+space_tool.result.plot(show=True, n_samples=200)
 # Workaround for HTML rendering, instead of ``show=True``
 plt.show()
 
 # %%
-# .. seealso::
+# !!! info "See also"
 #
-#    `Examples of visualization tools <https://gemseo.readthedocs.io/en/stable/examples/dataset/index.html>`__
-#    to post-process a :class:`~.gemseo.datasets.dataset.Dataset`.
+#     [Examples of visualization tools](https://gemseo.readthedocs.io/en/stable/examples/dataset/index.html)
+#     to post-process a `Dataset`.
 #
 
 # %%
@@ -217,16 +213,16 @@ plt.show()
 # To place the samples over the input space, we can use an optimal
 # `latin hypercube sampling (LHS) <https://en.wikipedia.org/wiki/Latin_hypercube_sampling>`__ technique.
 #
-# .. note::
+# !!! note
 #
-#    The LHS technique implemented by ``"OT_LHS"`` or ``"lhs"`` is stochastic:
-#    given a number of samples :math:`N` and an input space of dimension :math:`d`,
-#    executing it twice will lead to two different series of samples.
-#    Here, we are looking for the series of samples that best covers the input space
-#    (we talk about space-filling DOE);
-#    for that,
-#    we use ``"OT_OPT_LHS"`` relying on a global optimization algorithm
-#    (simulated annealing).
+#     The LHS technique implemented by ``"OT_LHS"`` or ``"lhs"`` is stochastic:
+#     given a number of samples $N$ and an input space of dimension $d$,
+#     executing it twice will lead to two different series of samples.
+#     Here, we are looking for the series of samples that best covers the input space
+#     (we talk about space-filling DOE);
+#     for that,
+#     we use ``"OT_OPT_LHS"`` relying on a global optimization algorithm
+#     (simulated annealing).
 #
 doe_tool = DOETool(working_directory="doe_tool_results")
 output_names = ["reaction_forces"]
@@ -278,4 +274,4 @@ print(results)
 
 # %%
 # The fitted synthetic distribution can be plotted.
-statistic_tool.plot_results(results, variable=output_name, save=False, show=True)
+results.plot(variable_names=[output_name], show=True)

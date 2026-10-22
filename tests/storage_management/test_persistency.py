@@ -151,6 +151,7 @@ def test_dir_arg_specifications(tmp_wd, verif_mode, job_name_spec, job_dirs_spec
     )
     expected_archive_dir = (
         expected_archive_dir
+        / m.archive_manager.study_name
         / (f"{m.__class__.__name__}/{m.load_case.name}")
         / archive_job_name
     )
@@ -203,8 +204,12 @@ def test_re_execution_incremental(tmp_wd, job_name_spec, use_cache):
     # first execution
     m.execute()
 
-    expected_archive_name = "specified_job" if job_name_spec else "1"
+    # Without job name, the job directory is named by the run_id.
+    expected_archive_name = (
+        "specified_job" if job_name_spec else m.get_output_data()["run_id"][0]
+    )
     assert m.archive_manager.job_directory.name == expected_archive_name
+    first_archive_name = expected_archive_name
 
     # second execution
     try:
@@ -214,10 +219,12 @@ def test_re_execution_incremental(tmp_wd, job_name_spec, use_cache):
         # because of archive over-writing
         assert job_name_spec is True
 
-    expected_archive_name = (
-        "specified_job" if job_name_spec else ("1" if use_cache else "2")
-    )
-    assert m.archive_manager.job_directory.name == expected_archive_name
+    if job_name_spec or use_cache:
+        # A cached execution creates no job directory.
+        assert m.archive_manager.job_directory.name == first_archive_name
+    else:
+        assert m.archive_manager.job_directory.name == m.get_output_data()["run_id"][0]
+        assert m.archive_manager.job_directory.name != first_archive_name
 
 
 def test_cache_from_archive(tmp_wd):

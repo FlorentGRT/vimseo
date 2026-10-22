@@ -162,9 +162,7 @@ tool.result.get_indices_dataframe()
 # a radar plot of the indices, a bar plot and a ($\mu^*$, $\sigma$) plot
 # for each output.
 # Here, the interactive bar plot:
-figures = tool.plot_results(
-    tool.result, output_names=output_names, show=False, save=False
-)
+figures = tool.result.plot(output_names=output_names)
 figures["bar_plot"]
 
 # %%
