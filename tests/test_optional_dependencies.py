@@ -45,7 +45,10 @@ from vimseo.utilities.optional_dependencies import import_optional
 
 EXTRA_TO_OPTIONAL_MODULES: dict[str, tuple[str, ...]] = {
     "dashboard": ("vimseo.dashboards",),
-    "mlflow": ("vimseo.storage_management.mlflow_storage",),
+    "mlflow": (
+        "vimseo.storage_management.mlflow_storage",
+        "vimseo.storage_management.tool_archive.mlflow_tool_archive",
+    ),
     "jax": ("vimseo.lib_vimseo.tan_lib_jax",),
     # pyvista is imported lazily, inside extract_line() and vtu_to_png(), so no
     # module of the package may fail to import when the "mesh" extra is missing.
