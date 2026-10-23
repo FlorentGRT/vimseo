@@ -33,6 +33,8 @@ or uses the samples of a DOE prepared in advance.
 ``BendingTestAnalytical`` is used to illustrate the use of this tool.
 
 For a local analysis around nominal values, see the One-factor-at-a-Time example.
+
+The last section, with runs archived in MLflow, needs the ``mlflow`` extra.
 """
 
 # %%
@@ -42,14 +44,12 @@ For a local analysis around nominal values, see the One-factor-at-a-Time example
 from __future__ import annotations
 
 import logging
-
-import mlflow
-from gemseo.core.discipline import Discipline
-from mlflow import delete_run
+import shutil
 
 from vimseo import EXAMPLE_RUNS_DIR
 from vimseo.api import activate_logger
 from vimseo.api import create_model
+from vimseo.api import open_model_results
 from vimseo.core.model_settings import IntegratedModelSettings
 from vimseo.tools.doe.doe import DOEInputs
 from vimseo.tools.doe.doe import DOESettings
@@ -257,30 +257,20 @@ tool.result.get_indices_dataframe("p_value_permutation")
 # e.g. runs gathered over several studies and searched in an archive,
 # as long as its input samples are independent
 # and distributed according to the probability distribution of the inputs.
-# Here, the runs are archived in [MLflow](https://mlflow.org).
-# The model archives its runs in the experiment ``"hsic_samples"``.
-# Its cache only keeps the last evaluation in memory,
-# so that every point of the DOE is run and archived once,
-# even when the example is executed again.
-model = create_model(
-    model_name,
-    load_case,
-    model_options=IntegratedModelSettings(
-        directory_archive_root=EXAMPLE_RUNS_DIR / "mlflow_archive/sensitivity",
-        directory_scratch_root=EXAMPLE_RUNS_DIR / "scratch/sensitivity",
-        cache_file_path=EXAMPLE_RUNS_DIR
-        / f"caches/sensitivity/{model_name}_{load_case}_mlflow_cache.hdf",
-        archive_manager="MlflowArchive",
-    ),
-)
-model.set_cache(Discipline.CacheType.SIMPLE)
-experiment_name = "hsic_samples"
-model.archive_manager.set_experiment(experiment_name)
+# Here, the runs are archived in [MLflow](https://mlflow.org),
+# in the study ``"hsic_samples"``, i.e. the MLflow experiment of this name
+# (see the examples of the data management).
+# The archive of a previous execution of this example is deleted,
+# and the model cache is disabled so that every point of the DOE is run and archived:
+archive = {
+    "archive_manager": "MlflowArchive",
+    "directory_archive_root": EXAMPLE_RUNS_DIR / "archive/sensitivity_mlflow",
+    "study_name": "hsic_samples",
+}
+shutil.rmtree(archive["directory_archive_root"], ignore_errors=True)
 
-# %%
-# The runs of a previous execution of this example are deleted:
-for run_id in mlflow.search_runs(experiment_names=[experiment_name])["run_id"]:
-    delete_run(run_id)
+model = create_model(model_name, load_case, **archive)
+model.cache = None
 
 # %%
 # The archive is populated by a Monte Carlo sampling;
@@ -293,24 +283,20 @@ DOETool(working_directory="mlflow_doe_results").execute(
 )
 
 # %%
-# The successful runs, whose error code is zero, are searched in the archive
-# (see the [MLflow search syntax](https://mlflow.org/docs/latest/ml/search/search-runs/));
-# the metadata of the runs, like the error code, are stored as tags.
-# The query could also filter on the inputs,
+# The successful simulations of the model are opened from the archive.
+# ``query`` could also filter on the inputs,
 # but it would then restrict their distribution,
 # so the samples would no longer follow the one of the parameter space.
-runs = mlflow.search_runs(
-    experiment_names=[experiment_name], filter_string="tags.error_code = '0'"
+model_results = open_model_results(
+    **archive, model_name=model_name, load_case=load_case, failed=False
 )
-runs
+model_results
 
 # %%
-# A cache is built from these runs,
-# and converted into a dataset restricted to the inputs of the parameter space
+# They are converted into a dataset restricted to the inputs of the parameter space
 # and to the analyzed outputs:
-cache = model.create_cache_from_archive(run_ids=runs["run_id"])
-dataset = cache.to_dataset(
-    input_names=space_tool.parameter_space.variable_names, output_names=output_names
+dataset = model_results.to_dataset(
+    variable_names=[*space_tool.parameter_space.variable_names, *output_names]
 )
 dataset
 
