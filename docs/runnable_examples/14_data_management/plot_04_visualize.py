@@ -127,8 +127,8 @@ tool_result.get_plot_choices()
 # value of the other varying inputs: the scalar outputs are drawn with a line per
 # family, or in a figure per family with ``family_layout="one_figure_per_family"``,
 # and the curves in a figure per family, e.g.
-# ``curves_dplt_vs_dplt_grid[width=20.0]``. A design varying the inputs jointly, like
-# a LHS, has no family: only its scatter matrix is relevant.
+# ``curves_moment_vs_moment_grid[width=20.0]``. A design varying the inputs jointly,
+# like a LHS, has no family: only its scatter matrix is relevant.
 
 # %%
 figures = tool_result.plot(scatter_matrix_variable_names=["height", "reaction_forces"])
@@ -146,8 +146,8 @@ figures = tool_result.plot(
 # one figure per figure of the model, the curves being labelled by the inputs varying
 # between the results. A figure missing from some results, e.g. when they come from
 # different models, is not drawn and a warning names it:
-figures = model_results.visualize(plot_names=["dplt_vs_dplt_grid"])
-figures["dplt_vs_dplt_grid"]
+figures = model_results.visualize(plot_names=["moment_vs_moment_grid"])
+figures["moment_vs_moment_grid"]
 
 # %%
 # Tables

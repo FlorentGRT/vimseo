@@ -97,7 +97,7 @@ families
 # A family is a collection, which superposes the curves of its results, labelled by
 # the value of the varying input:
 family = families.get(width=20.0)
-family.visualize(plot_names=["dplt_vs_dplt_grid"])["dplt_vs_dplt_grid"]
+family.visualize(plot_names=["moment_vs_moment_grid"])["moment_vs_moment_grid"]
 
 # %%
 # The figures of all the families show their scalar outputs versus the varying input:
