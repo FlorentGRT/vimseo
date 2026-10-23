@@ -69,8 +69,12 @@ and this project adheres to
   as for `pandas.DataFrame.query`, with `or`. `open_model_results` and
   `open_tool_results` open a whole archive as a collection, explored with `filter`,
   `ignoring`, `varying_inputs`, `families(along=...)`, `duplicates`, `to_dataframe`,
-  `to_dataset` and `visualize`. The resolvers of `storage_management.tool_archive.uri` take
-  their archive settings as keyword arguments only.
+  `to_dataset` and `visualize`. The collection of the results of a single tool keeps
+  only the inputs and outputs of this tool, and `to_dataframe` keeps the prefixes
+  `inputs.` / `outputs.` of an input and an output with the same name, e.g. the
+  setting and the key value `n_samples` of a DOE. The resolvers of
+  `storage_management.tool_archive.uri` take their archive settings as keyword
+  arguments only.
 - `ModelResult` is structured: `scalars` and `vectors` are mappings which can be called
   to select variables by name, type and group (`scalars(group="inputs")`); `curves` and
   `plots` are lists which can also be indexed by name (`curves["dplt_vs_dplt_grid"]`);
@@ -160,10 +164,6 @@ and this project adheres to
 
 ## Fixed
 
-- The cache of the discipline wrapped by a `BaseDisciplineModel` (GEMSEO sets a
-  `SimpleCache` by default) is now disabled, the model managing the cache. With the
-  model cache disabled, it still answered: the discipline was not executed but the
-  model archived a new simulation.
 - The scatter matrix of a code verification, against data or against a model,
   showed the inputs only: it now shows the scalar errors versus the inputs, also when
   a single input varies. Breaking: its figure `input_scatter_matrix_{metric}` is

@@ -112,7 +112,7 @@ class ResultsCollection(Generic[T]):
             ignored: The names of the inputs ignored by the comparisons.
             cache: The results already loaded, bound to their identifiers.
         """
-        self.__summaries = summaries.reset_index(drop=True)
+        self.__summaries = self._prune(summaries.reset_index(drop=True))
         self.__loader = loader
         self.__ignored = tuple(dict.fromkeys(ignored))
         self.__cache = {} if cache is None else cache
@@ -125,6 +125,15 @@ class ResultsCollection(Generic[T]):
             self.__ignored if ignored is None else ignored,
             self.__cache,
         )
+
+    @staticmethod
+    def _prune(summaries: DataFrame) -> DataFrame:
+        """Return the summaries without the columns foreign to the results.
+
+        Args:
+            summaries: The summaries of the results.
+        """
+        return summaries
 
     @property
     def summaries(self) -> DataFrame:
@@ -413,12 +422,31 @@ class ToolResults(ResultsCollection["BaseResult"]):
     """A collection of tool results, the results of tool runs.
 
     The inputs of a tool run are its scalar settings and the identity of its model;
-    its outputs are its key values (see :meth:`.BaseResult.get_key_values`).
+    its outputs are its key values (see :meth:`.BaseResult.get_key_values`). The
+    collection of the results of a single tool has only the inputs and the outputs of
+    this tool, not those of the other tools of the archive.
     """
 
     _ID_COLUMN = "tool_run_id"
     _KIND = "tool results"
     _NAME_COLUMN = "tool_name"
+
+    @staticmethod
+    def _prune(summaries: DataFrame) -> DataFrame:
+        # The summaries of an archive hold the inputs and outputs of all its tools,
+        # missing for the runs of the other tools.
+        if (
+            "tool_name" not in summaries.columns
+            or summaries["tool_name"].nunique() != 1
+        ):
+            return summaries
+        foreign = [
+            column
+            for column in summaries.columns
+            if column.startswith((INPUT_PREFIX, OUTPUT_PREFIX))
+            and summaries[column].isna().all()
+        ]
+        return summaries.drop(columns=foreign)
 
     def _check_homogeneous(self) -> None:
         tool_names = set(self.summaries.get("tool_name", ()))

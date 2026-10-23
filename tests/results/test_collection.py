@@ -182,6 +182,48 @@ def test_tool_results(tmp_wd):
     assert len(search_tool_runs(**archive, query="`inputs.foo` == 'b'")) == 1
 
 
+def _create_tool_results() -> ToolResults:
+    """Create the tool results of an archive holding a DOE and a design value."""
+    from pandas import DataFrame
+
+    return ToolResults(
+        DataFrame([
+            {
+                "tool_run_id": "doe",
+                "tool_name": "DOETool",
+                "status": "FINISHED",
+                "inputs.n_samples": 10,
+                "outputs.n_samples": 10.0,
+            },
+            {
+                "tool_run_id": "design_value",
+                "tool_name": "DesignValueTool",
+                "status": "FINISHED",
+                "inputs.n_samples": 10,
+                "outputs.mean": 1.0,
+            },
+        ]),
+        loader=lambda row: None,
+    )
+
+
+def test_tool_results_of_one_tool_have_its_columns_only():
+    """The columns of the other tools are dropped from the results of one tool."""
+    tool_results = _create_tool_results()
+    assert "outputs.mean" in tool_results.summaries.columns
+    design_values = tool_results.filter(tool_name="DesignValueTool")
+    assert "outputs.n_samples" not in design_values.summaries.columns
+    assert list(design_values.to_dataframe().columns[-2:]) == ["n_samples", "mean"]
+    assert "outputs.mean" not in tool_results.filter(tool_name="DOETool").summaries
+
+
+def test_to_dataframe_keeps_the_prefixes_of_homonyms():
+    """An input and an output with the same name keep their prefixes."""
+    table = _create_tool_results().filter(tool_name="DOETool").to_dataframe()
+    assert {"inputs.n_samples", "outputs.n_samples"} <= set(table.columns)
+    assert "n_samples" not in table.columns
+
+
 def test_tool_results_of_several_tools(tmp_wd):
     """Comparing the results of several tools raises an error."""
     from vimseo.tools.mock.mock_tool import MyToolNoInputs

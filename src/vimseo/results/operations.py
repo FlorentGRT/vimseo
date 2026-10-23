@@ -22,6 +22,7 @@ objects and never change their arguments nor the archive.
 
 from __future__ import annotations
 
+from collections import Counter
 from typing import TYPE_CHECKING
 from typing import Any
 
@@ -163,7 +164,8 @@ def to_dataframe(
             If empty, all the columns.
 
     Returns:
-        The table, whose columns are the names of the variables, without prefix.
+        The table, whose columns are the names of the variables, without prefix
+        unless an input and an output have the same name.
     """
     variable_names = list(variable_names)
     if not variable_names:
@@ -183,11 +185,19 @@ def to_dataframe(
             if id_column not in columns
             else (summaries[columns])
         )
-    renamed = {
-        column: column.split(".", 1)[1]
+    # A column keeps its prefix when its name would collide with another column, e.g.
+    # a setting and a key value of a tool, both named n_samples.
+    stripped = Counter(
+        column.split(".", 1)[1]
         for column in table.columns
         if column.startswith((INPUT_PREFIX, OUTPUT_PREFIX))
-        and column.split(".", 1)[1] not in table.columns
+    )
+    renamed = {
+        column: name
+        for column in table.columns
+        if column.startswith((INPUT_PREFIX, OUTPUT_PREFIX))
+        and stripped[name := column.split(".", 1)[1]] == 1
+        and name not in table.columns
     }
     return table.rename(columns=renamed).set_index(id_column)
 
