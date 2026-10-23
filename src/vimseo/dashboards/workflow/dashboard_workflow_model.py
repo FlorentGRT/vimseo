@@ -15,7 +15,6 @@
 
 from __future__ import annotations
 
-import getpass
 import json
 import tempfile
 from copy import deepcopy
@@ -34,6 +33,7 @@ from vimseo.tools.base_result import BaseResult
 from vimseo.tools.io.reader_tools_factory import ReaderToolsFactory
 from vimseo.tools.tools_factory import AnalysisToolsFactory
 from vimseo.tools.tools_factory import ToolsFactory
+from vimseo.utilities.user import get_user_name
 from vimseo.workflow.workflow_step import Input
 from vimseo.workflow.workflow_step import WorkflowStep
 from vimseo.workflow.workflow_step import get_pydantic_model_item
@@ -154,7 +154,7 @@ def add_step(session_state, name, tool_name, constructor_options):
 
 
 def get_workflow_file_name(suffix):
-    user = getpass.getuser()
+    user = get_user_name()
     datetime_ = datetime.now().strftime("%Y-%m-%d_T%H-%M-%S")
     if suffix != "":
         suffix = f"_{suffix}"

@@ -169,9 +169,7 @@ tool.result.get_indices_dataframe("relative_delta_f")
 # %%
 # The tornado diagram of an output shows its variations
 # from the center of the star, the most influential inputs at the top:
-figures = tool.plot_results(
-    tool.result, output_names=["reaction_forces"], show=False, save=False
-)
+figures = tool.result.plot(output_names=["reaction_forces"])
 figures["tornado_reaction_forces"]
 
 # %%

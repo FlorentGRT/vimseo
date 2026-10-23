@@ -17,10 +17,8 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 from typing import TYPE_CHECKING
 
-import plotly.graph_objects as go
 from gemseo.algos.parameter_space import ParameterSpace
 from gemseo.datasets.io_dataset import IODataset
 from gemseo.utils.directory_creator import DirectoryNamingMethod
@@ -51,7 +49,7 @@ from vimseo.tools.sensitivity.oat_sensitivity_result import OATIndices
 from vimseo.tools.sensitivity.oat_sensitivity_result import OATSensitivityResult
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from pathlib import Path
 
     from gemseo.typing import RealArray
 
@@ -272,45 +270,6 @@ class OATSensitivityTool(BaseAnalysisTool):
 
         self.result.indices = indices
 
-    def plot_results(
-        self,
-        result: OATSensitivityResult,
-        output_names=(),
-        directory_path: str | Path = "",
-        save=False,
-        show=True,
-    ) -> Mapping[str, go.Figure]:
-        """Plot a tornado diagram for each component of the outputs.
-
-        The bars show the variations of the output from the center of the star
-        when each input component varies alone,
-        sorted by decreasing absolute centered variation ``delta_f``.
-
-        Args:
-            output_names: The names of the outputs.
-                If empty, use all the outputs of the analysis.
-
-        Returns:
-            The tornado diagrams.
-        """
-        directory_path = (
-            self.working_directory if directory_path == "" else Path(directory_path)
-        )
-        output_names = output_names or list(result.indices["delta_f"])
-        figures = {}
-        for output_name in output_names:
-            n_components = len(result.indices["delta_f"][output_name])
-            for j in range(n_components):
-                label = output_name if n_components == 1 else f"{output_name}[{j}]"
-                figure = _create_tornado(result, output_name, j, label)
-                figures[f"tornado_{label}"] = figure
-                if save:
-                    figure.write_html(directory_path / f"tornado_{label}.html")
-                if show:
-                    figure.show()
-
-        return figures
-
 
 def _split(
     values: RealArray, names: list[str], sizes: list[int]
@@ -330,45 +289,3 @@ def _split(
         name: values[end - size : end]
         for name, size, end in zip(names, sizes, ends, strict=True)
     }
-
-
-def _create_tornado(
-    result: OATSensitivityResult, output_name: str, component: int, label: str
-) -> go.Figure:
-    """Create a tornado diagram for an output component.
-
-    Args:
-        result: The result of the OAT sensitivity analysis.
-        output_name: The name of the output.
-        component: The component of the output.
-        label: The label of the output component.
-
-    Returns:
-        The tornado diagram.
-    """
-    # The most influential input is at the top.
-    input_names = result.sort_input_variables(output_name, component)[::-1]
-    figure = go.Figure()
-    # Explicit colors: a "+ step" bar can lie on the negative side.
-    sides = [("delta_f_plus", "+ step", "#1f77b4")]
-    if result.two_sided:
-        sides.append(("delta_f_minus", "- step", "#d62728"))
-    for index_name, name, color in sides:
-        values = result.get_indices_dataframe(index_name)[label]
-        figure.add_trace(
-            go.Bar(
-                x=[values[input_name] for input_name in input_names],
-                y=input_names,
-                orientation="h",
-                name=name,
-                marker_color=color,
-            )
-        )
-
-    figure.update_layout(
-        barmode="overlay",
-        title=f"OAT sensitivity of {label}",
-        xaxis_title=f"Variation of {label} from the center of the star",
-        yaxis_title="Input",
-    )
-    return figure

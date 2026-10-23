@@ -19,11 +19,13 @@ import pytest
 from gemseo.algos.parameter_space import ParameterSpace
 from gemseo.datasets.dataset import Dataset
 from gemseo.datasets.io_dataset import IODataset
+from numpy import array
 from numpy import full
 from numpy import vstack
 from numpy.testing import assert_allclose
 from numpy.testing import assert_array_equal
 
+from vimseo.api import create_model
 from vimseo.problems.mock.mock_pre_run_post.mock_main import MockModel
 from vimseo.problems.mock.mock_reference_data.mock_main_reference_functions import (
     mock_model_lc2_overall_function,
@@ -35,6 +37,7 @@ from vimseo.tools.doe.doe import DOETool
 from vimseo.tools.doe.doe_result import DOEResult
 from vimseo.utilities.datasets import Variable
 from vimseo.utilities.datasets import generate_dataset
+from vimseo.utilities.test_utils import check_result_visualization
 
 N_SAMPLES = 5
 
@@ -268,3 +271,137 @@ def test_doe_algo_settings(tmp_wd, parameter_space):
     assert len(x1) == 4
     # The OAT step of x1 is 0.25 * (1 - (-1)).
     assert abs(x1[1] - x1[0]) == pytest.approx(0.5)
+
+
+@pytest.fixture
+def mesh_size_study(tmp_wd):
+    """A DOE varying the input ``x`` of a model with vector outputs and PLOTS."""
+    model = create_model("MockCurves", "Dummy")
+    input_dataset = IODataset()
+    input_dataset.add_variable("x", array([[1.0], [2.0], [3.0]]), IODataset.INPUT_GROUP)
+    input_dataset.add_variable("x_1", full((3, 1), 0.5), IODataset.INPUT_GROUP)
+    return CustomDOETool().execute(model=model, input_dataset=input_dataset)
+
+
+def test_doe_result_has_model_figures(mesh_size_study):
+    """The description of the model and its figures are stored in the result."""
+    assert mesh_size_study.metadata.model.name == "MockCurves"
+    assert [plot.get_key() for plot in mesh_size_study.plots] == [
+        ("x_history", "y_history")
+    ]
+
+
+def test_parametric_study_figures(mesh_size_study):
+    """A DOE varying a single input shows its scalar outputs versus this input,
+    and the curves of the PLOTS of the model, superposed for all the samples."""
+    figures = mesh_size_study.plot()
+    assert "scatter_matrix" in figures
+    assert "scalar_outputs_vs_x" in figures
+    curves = figures["curves_y_history_vs_x_history"]
+    assert [line.name for line in curves.data] == ["x = 1", "x = 2", "x = 3"]
+    check_result_visualization(mesh_size_study, "visualization")
+
+
+def test_without_varying_input(mesh_size_study):
+    """Without a single varying input, the samples are not a parametric study."""
+    mesh_size_study.dataset.loc[:, ("inputs", "x", 0)] = 1.0
+    figures = mesh_size_study.plot()
+    assert not any(key.startswith("scalar_outputs_vs") for key in figures)
+    assert [line.name for line in figures["curves_y_history_vs_x_history"].data] == [
+        "sample 0",
+        "sample 1",
+        "sample 2",
+    ]
+
+
+def test_without_model_plots(tmp_wd, mock_model_doe):
+    """Without vector outputs, no curve is shown."""
+    figures = mock_model_doe.result.plot()
+    assert not any(key.startswith("curves_") for key in figures)
+
+
+def test_scatter_matrix_variable_names(mesh_size_study):
+    """The variables of the scatter matrix can be selected among the proposed ones."""
+    choices = mesh_size_study.get_plot_choices()
+    assert choices["scatter_matrix_variable_names"] == ["x", "x_1", "cpu_time"]
+    figure = mesh_size_study.plot(scatter_matrix_variable_names=["x", "cpu_time"])[
+        "scatter_matrix"
+    ]
+    assert len(figure.axes) == 4
+
+
+@pytest.fixture
+def factorial_study(tmp_wd):
+    """A full factorial DOE of the inputs ``x`` and ``x_1`` of a model with curves,
+    plus a sample belonging to no family along ``x``."""
+    x = [1.0, 2.0, 3.0, 1.0, 2.0, 3.0, 4.0]
+    x_1 = [0.5, 0.5, 0.5, 1.0, 1.0, 1.0, 2.0]
+    input_dataset = IODataset()
+    input_dataset.add_variable("x", array([x]).T, IODataset.INPUT_GROUP)
+    input_dataset.add_variable("x_1", array([x_1]).T, IODataset.INPUT_GROUP)
+    return CustomDOETool().execute(
+        model=create_model("MockCurves", "Dummy"), input_dataset=input_dataset
+    )
+
+
+def test_families_in_one_figure(factorial_study, caplog):
+    """When several inputs vary, the scalar outputs are drawn with a line per family
+    of samples differing by the abscissa only, and the curves per family."""
+    figures = factorial_study.plot(abscissa_name="x")
+    scalars = figures["scalar_outputs_vs_x"]
+    assert {trace.name for trace in scalars.data} == {"x_1=0.5", "x_1=1.0"}
+    assert all(len(trace.x) == 3 for trace in scalars.data)
+    curves = figures["curves_y_history_vs_x_history[x_1=0.5]"]
+    assert [line.name for line in curves.data] == ["x = 1", "x = 2", "x = 3"]
+    assert "curves_y_history_vs_x_history[x_1=1.0]" in figures
+    assert not any(key.startswith("scalar_outputs_vs_x[") for key in figures)
+    assert "1 samples belong to no family along x" in caplog.text
+
+
+def test_one_figure_per_family(factorial_study):
+    """The scalar outputs of each family can be drawn in a figure per family."""
+    figures = factorial_study.plot(
+        abscissa_name="x", family_layout="one_figure_per_family"
+    )
+    assert "scalar_outputs_vs_x" not in figures
+    assert "scalar_outputs_vs_x[x_1=0.5]" in figures
+    assert "scalar_outputs_vs_x[x_1=1.0]" in figures
+
+
+def test_factorial_study_without_abscissa(factorial_study):
+    """Without abscissa, the curves of the samples are labelled by the varying
+    inputs, and the inputs forming families are proposed as abscissa."""
+    figures = factorial_study.plot()
+    assert not any(key.startswith("scalar_outputs_vs") for key in figures)
+    curves = figures["curves_y_history_vs_x_history"]
+    assert curves.data[0].name == "x = 1, x_1 = 0.5"
+    assert factorial_study.get_plot_choices()["abscissa_name"] == ["x", "x_1"]
+
+
+def test_lhs_has_no_family(tmp_wd, caplog):
+    """A design varying the inputs jointly has no parametric study."""
+    parameter_space = ParameterSpace()
+    for name in ("x", "x_1"):
+        parameter_space.add_random_variable(
+            name, "OTUniformDistribution", minimum=0.0, maximum=1.0
+        )
+    result = DOETool().execute(
+        model=create_model("MockCurves", "Dummy"),
+        parameter_space=parameter_space,
+        n_samples=4,
+    )
+    figures = result.plot(abscissa_name="x")
+    assert "scatter_matrix" in figures
+    assert not any(key.startswith("scalar_outputs_vs") for key in figures)
+    assert not any(key.startswith("curves_") for key in figures)
+    assert "4 samples belong to no family along x" in caplog.text
+    assert "abscissa_name" not in result.get_plot_choices()
+    assert result.get_families() == {}
+
+
+def test_get_families(factorial_study):
+    """The families are given along each input forming some."""
+    assert factorial_study.get_families() == {
+        "x": {"x_1=0.5": [0, 1, 2], "x_1=1.0": [3, 4, 5]},
+        "x_1": {"x=1.0": [0, 3], "x=2.0": [1, 4], "x=3.0": [2, 5]},
+    }

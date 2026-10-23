@@ -39,7 +39,7 @@ def test_from_scalars_and_vectors(tmp_wd):
     model = create_model("MockModelPersistent", "LC1")
     model.execute()
     model_data = {"inputs": model.get_input_data(), "outputs": model.get_output_data()}
-    result = ModelResult.from_data(model_data)
+    result = ModelResult.from_dict(model_data)
 
     assert result.scalars == {
         "x1": 2.0,
@@ -74,7 +74,7 @@ def test_superpose_curves(tmp_wd):
     assert Path("curves.html").exists()
     assert len(fig.data) == 10
 
-    curves.append(Curve({"xd": xc, "yc": xc}))
+    result.curves.append(Curve({"xd": xc, "yc": xc}))
     msg = (
         "Abscissa names are not unique: "
         "['xc', 'xc', 'xc', 'xc', 'xc', 'xc', 'xc', 'xc', 'xc', 'xc', 'xd']"
@@ -95,7 +95,7 @@ def test_superpose_curves_labels(tmp_wd):
 def test_scalars_to_dataframe():
     """Check that a model result can plot scalars."""
     result = ModelResult(scalars={"x": 1.0, "y": 2.0, "s": "foo"})
-    df = DataFrame([result.get_numeric_scalars()])
+    df = DataFrame([result.scalars()])
     expected_df = DataFrame([{"x": 1.0, "y": 2.0}])
     assert_frame_equal(df, expected_df)
 
@@ -110,18 +110,6 @@ def test_str():
     )
     expected = "\nScalars:\n{'x': 1.0}\n\nVectors:\n{'v': array([1., 2.])}\n\nCurves:\n   ('xc', 'yc')\n         0    1\nxc  0.0  1.0\nyc  0.0  1.0\n   \nFields:\n{'pyramid': ['pyramid.vtk']}"
     assert str(result) == expected
-
-
-def test_get_curve():
-    """Requesting an unknown curve returns an empty list."""
-    result = ModelResult(
-        curves=[Curve({"xc": array([0.0, 1.0]), "yc": array([0.0, 1.0])})],
-    )
-    curve = result.get_curve(("xc", "yc"))
-    assert isinstance(curve, Curve)
-    assert curve.variable_names == ("xc", "yc")
-    assert result.get_curve(("unknows_x", "yc")) == []
-    assert result.get_curve(("unknown_x", "unknown_y")) == []
 
 
 def test_fields(tmp_wd):
@@ -142,7 +130,7 @@ def test_fields(tmp_wd):
     ).exists()
 
     model_data = {"inputs": model.get_input_data(), "outputs": model.get_output_data()}
-    result = ModelResult.from_data(model_data, load_fields=True)
+    result = ModelResult.from_dict(model_data, load_fields=True)
     field = result.fields["pyramid"][0]
     assert_array_equal(
         array(field.mesh_points),
@@ -154,3 +142,54 @@ def test_fields(tmp_wd):
             [0.0, 0.0, 1.0],
         ]),
     )
+
+
+def test_structured_model_result(tmp_wd):
+    """The variables are told apart by group, the curves and figures by name."""
+    model = create_model("BendingTestAnalytical", "Cantilever")
+    model.execute()
+    model_data = {"inputs": model.get_input_data(), "outputs": model.get_output_data()}
+    result = ModelResult.from_dict(model_data)
+
+    assert result.scalars["height"] == pytest.approx(40.0)
+    assert "height" in result.scalars(group="inputs")
+    assert "height" not in result.scalars(group="outputs")
+    assert "reaction_forces" in result.scalars(group="outputs")
+    assert set(result.scalars(["height", "reaction_forces"])) == {
+        "height",
+        "reaction_forces",
+    }
+    with pytest.raises(ValueError, match="Unknown group"):
+        result.scalars(group="parameters")
+
+    assert result.curves["dplt_vs_dplt_grid"].variable_names == ("dplt_grid", "dplt")
+    assert result.plots.names == ["dplt_vs_dplt_grid", "moment_vs_moment_grid"]
+    assert result.plots["moment_vs_moment_grid"]["moment"].variable_names == (
+        "moment_grid",
+        "moment",
+    )
+    assert set(result.plot()) == set(result.plots.names)
+    assert set(result.plot(plot_names=["dplt_vs_dplt_grid"])) == {"dplt_vs_dplt_grid"}
+
+    assert result.run_id == model.get_output_data()[MetaDataNames.run_id][0]
+    assert result.model_name == "BendingTestAnalytical"
+    assert result.load_case == "Cantilever"
+    assert result.study_name == "default_study"
+    assert result.status == "FINISHED"
+
+
+def test_to_dict_and_from_dict(tmp_wd):
+    """The raw data of a result rebuilds an equal result."""
+    model = create_model("BendingTestAnalytical", "Cantilever")
+    model.execute()
+    result = ModelResult.from_dict({
+        "inputs": model.get_input_data(),
+        "outputs": model.get_output_data(),
+    })
+    raw = result.to_dict()
+    assert set(raw) == {"inputs", "outputs", "metadata"}
+    assert raw["inputs"]["height"] == pytest.approx(40.0)
+    assert raw["metadata"][MetaDataNames.run_id] == result.run_id
+    rebuilt = ModelResult.from_dict(raw, model=model)
+    assert dict(rebuilt.scalars) == dict(result.scalars)
+    assert rebuilt.curves.names == result.curves.names

@@ -62,7 +62,7 @@ The rest is shipped by optional dependencies, the *extras*:
 
 | Extra | Install with | Brings | Needed for |
 | --- | --- | --- | --- |
-| `dashboard` | `pip install "vimseo[dashboard]"` | `streamlit` | The `dashboard_workflow` and `dashboard_database_viewer` interfaces |
+| `dashboard` | `pip install "vimseo[dashboard]"` | `streamlit` | The `dashboard_workflow` interface |
 | `mlflow` | `pip install "vimseo[mlflow]"` | `mlflow` | The `MlflowArchive` storage backend. Without it, `DirectoryArchive` -- the default -- remains available |
 | `mesh` | `pip install "vimseo[mesh]"` | `pyvista` | VTK field post-processing (`extract_line`, `vtu_to_png`) and **executing the `TanOpenHole` model**. Pulls `vtk` (~330 MB) and needs system OpenGL libraries |
 | `jax` | `pip install "vimseo[jax]"` | `jax` | Necessary to obtain the jacobian of the `TanOpenHole` model |
@@ -207,7 +207,8 @@ tool.execute(
 )
 tool.execute()
 tool.save_results()
-tool.plot_results(tool.result, show=True)
+# The numerical values of the result, as tables:
+tool.result.to_dataframes()
 ```
 
 The database GUI is then opened to explore the results:

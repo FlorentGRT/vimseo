@@ -36,6 +36,7 @@ from vimseo.tools.sensitivity.sensitivity import SensitivityTool
 from vimseo.tools.sensitivity.sensitivity import SensitivityToolInputs
 from vimseo.tools.sensitivity.sensitivity import SensitivityToolSettings
 from vimseo.tools.sensitivity.sensitivity_result import SensitivityResult
+from vimseo.utilities.test_utils import check_result_visualization
 
 
 @pytest.fixture
@@ -135,8 +136,10 @@ def test_sensitivity_vector_input(tmp_wd, sensitivity_algo, settings, expected_i
             rtol=1e-5,
         )
     sensitivity_tool.save_results()
-    sensitivity_tool.plot_results(
-        sensitivity_tool.result, output_names=["y4"], save=True, show=False
+    sensitivity_tool.result.plot(
+        directory_path=sensitivity_tool.working_directory,
+        output_names=["y4"],
+        save=True,
     )
 
 
@@ -154,14 +157,13 @@ def test_save_and_load_result(tmp_wd, sensitivity_tool):
 
 
 def test_plots(tmp_wd, sensitivity_tool):
-    sensitivity_tool.plot_results(
-        sensitivity_tool.result,
+    sensitivity_tool.result.plot(
+        directory_path=sensitivity_tool.working_directory,
         save=True,
-        show=False,
         output_names=["y1"],
         standardize=True,
     )
-    expected_filenames = ["bar_plot.html", "radar_chart.png", "standard_plot_y1.png"]
+    expected_filenames = ["bar_plot.html", "radar_plot.png", "standard_plot_y1.png"]
     for name in expected_filenames:
         assert (sensitivity_tool.working_directory / name).is_file()
 
@@ -579,3 +581,21 @@ def test_hsic_p_values(tmp_wd, parameter_space):
         table = tool.result.get_indices_dataframe(name)
         assert list(table.index) == ["x1", "x1_maximum_only"]
         assert ((table >= 0) & (table <= 1)).all().all()
+
+
+def test_result_visualization(tmp_wd, sensitivity_tool):
+    """Check that a sensitivity result can be visualized once loaded from a file."""
+    check_result_visualization(sensitivity_tool.result, "visualization")
+    tables = sensitivity_tool.result.to_dataframes()
+    assert "indices_mu_star" in tables
+    assert "y1" in tables["indices_mu_star"].columns
+
+
+def test_key_values(tmp_wd, sensitivity_tool):
+    """The sensitivity indices summarize a sensitivity analysis."""
+    result = sensitivity_tool.result
+    key_values = result.get_key_values()
+    assert key_values["mu_star.y1.x1"] == pytest.approx(
+        float(result.indices.mu_star["y1"][0]["x1"][0])
+    )
+    assert all(name.count(".") == 2 for name in key_values)

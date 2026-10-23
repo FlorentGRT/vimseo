@@ -30,6 +30,7 @@ from vimseo.utilities.model_data import decapsulate_length_one_array
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
+    from collections.abc import Sequence
     from pathlib import Path
 
     from vimseo.storage_management.base_storage_manager import PersistencyPolicy
@@ -52,6 +53,82 @@ ArchiveResultType = Mapping[str, Mapping[str, ndarray | Number | str]]
 """
 
 
+def _order_results(
+    run_ids: Sequence[str], found: Mapping[str, ModelDataType], location: object
+) -> list[ModelDataType]:
+    """Return the results found for some ``run_id``, in their order.
+
+    Args:
+        run_ids: The ``run_id`` of the simulations.
+        found: The results found, bound to their ``run_id``.
+        location: The location of the archive, for the error message.
+
+    Raises:
+        KeyError: If a simulation was not found.
+    """
+    missing = [run_id for run_id in run_ids if run_id not in found]
+    if missing:
+        msg = f"No simulation with run_id {missing} in the archive {location}."
+        raise KeyError(msg)
+    return [found[run_id] for run_id in run_ids]
+
+
+SUMMARY_METADATA_NAMES = (
+    MetaDataNames.error_code,
+    MetaDataNames.user,
+    MetaDataNames.description,
+    MetaDataNames.cpu_time,
+    MetaDataNames.n_cpus,
+    MetaDataNames.job_name,
+)
+"""The metadata of a simulation copied to its summary, besides its identity."""
+
+
+def _is_scalar(value: object) -> bool:
+    """Return whether a value is a number or a string, to be a column of a summary."""
+    return isinstance(value, (Number, str)) and not isinstance(value, bool)
+
+
+def create_simulation_summary(
+    archive_result: ArchiveResultType, study_name: str, uri: str
+) -> dict[str, object]:
+    """Create the summary of an archived simulation.
+
+    Args:
+        archive_result: The inputs, outputs and metadata of the simulation, the
+            arrays of length one being scalars.
+        study_name: The study of the simulation.
+        uri: The URI of the simulation.
+
+    Returns:
+        The summary: ``run_id``, ``study_name``, ``model_name``, ``load_case``,
+        ``status``, ``datetime``, ``tool_run_id``, ``uri``, the metadata of
+        :data:`SUMMARY_METADATA_NAMES`, and the scalar inputs and outputs as
+        ``inputs.{name}`` and ``outputs.{name}``.
+    """
+    metadata = archive_result["metadata"]
+    summary = {
+        "run_id": str(metadata.get(MetaDataNames.run_id, "")),
+        "study_name": study_name,
+        "model_name": str(metadata.get(MetaDataNames.model, "")),
+        "load_case": str(metadata.get(MetaDataNames.load_case, "")),
+        "status": str(metadata.get(MetaDataNames.status, "FINISHED")),
+        "datetime": str(metadata.get(MetaDataNames.date, "")),
+        "tool_run_id": str(metadata.get(MetaDataNames.tool_run_id, "")),
+        "uri": uri,
+    }
+    summary.update({
+        name: metadata[name] for name in SUMMARY_METADATA_NAMES if name in metadata
+    })
+    for group in ("inputs", "outputs"):
+        summary.update({
+            f"{group}.{name}": value
+            for name, value in archive_result.get(group, {}).items()
+            if _is_scalar(value)
+        })
+    return summary
+
+
 class BaseArchiveManager(BaseStorageManager):
     """A base class for result database storage."""
 
@@ -62,11 +139,14 @@ class BaseArchiveManager(BaseStorageManager):
         persistency: PersistencyPolicy,
         job_name: str = "",
         persistent_file_names: Iterable[str] = (),
+        study_name: str = "",
     ):
+        from vimseo.config.global_configuration import _configuration as config
+
         super().__init__(persistency)
         self._job_name = job_name
         self._persistent_file_names = persistent_file_names
-        self._experiment_name = ""
+        self._study_name = study_name or config.study_name
         self._current_run_id = ""
 
     def add_persistent_file_names(self, persistent_file_names: Iterable[str]):
@@ -87,9 +167,19 @@ class BaseArchiveManager(BaseStorageManager):
         return ""
 
     @property
-    def experiment_name(self):
-        """The name of the current experiment."""
-        return self._experiment_name
+    def study_name(self) -> str:
+        """The study of the next runs."""
+        return self._study_name
+
+    def set_study_name(self, study_name: str) -> None:
+        """Set the study of the next runs.
+
+        The runs keep their grouping by model and load case under the study.
+
+        Args:
+            study_name: The study.
+        """
+        self._study_name = study_name
 
     @property
     def run_name(self):
@@ -132,8 +222,53 @@ class BaseArchiveManager(BaseStorageManager):
     def get_result(self, archive_id: str | Path) -> ModelDataType:
         """Get an archived result."""
 
-    def set_experiment(self, experiment_name: str):
-        """Set an experiment."""
+    @abstractmethod
+    def get_results_by_run_id(self, run_ids: Iterable[str]) -> list[ModelDataType]:
+        """Return the archived results of simulations from their ``run_id``.
+
+        The ``run_id`` of a simulation is a metadata of its result. It is also the
+        identifier listed in the ``simulation_run_ids`` of the metadata of a tool
+        result. The whole archive is searched, whatever the study.
+
+        Args:
+            run_ids: The ``run_id`` of the simulations.
+
+        Returns:
+            The results, in the order of ``run_ids``.
+
+        Raises:
+            KeyError: If a simulation is not in the archive.
+        """
+
+    @abstractmethod
+    def search_results(
+        self,
+        model_name: str = "",
+        load_case: str = "",
+        study_name: str = "",
+        status: str = "FINISHED",
+    ) -> list[dict[str, object]]:
+        """Search the archived simulations, without loading their results.
+
+        An empty filter means every value; every study is searched by default.
+
+        Args:
+            model_name: The name of the model.
+            load_case: The name of the load case.
+            study_name: The study.
+            status: The status of the simulations, ``""`` for all.
+
+        Returns:
+            One summary per simulation (see :func:`create_simulation_summary`),
+            sorted by ``run_id``, i.e. from the oldest to the newest.
+        """
+
+    def abort_job(self):
+        """Release what :meth:`create_job_directory` allocated, after a job failure.
+
+        Called when the job raised before its results could be published. Does
+        nothing by default: the job directory of a directory archive is left as is.
+        """
 
     def set_run_name(self, run_name: str):
         """Set the run name."""

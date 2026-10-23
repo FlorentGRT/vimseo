@@ -43,7 +43,7 @@ class DirectoryScratch(BaseStorageManager):
         super().__init__(persistency)
         self._root_directory = root_directory
         self._job_name = job_name
-        self._experiment_name = f"./{model_name}/{load_case_name}/"
+        self._job_sub_path = f"./{model_name}/{load_case_name}/"
         self._accept_overwrite_job_dir = True
         self._job_directory = ""
 
@@ -57,7 +57,7 @@ class DirectoryScratch(BaseStorageManager):
         self._job_directory = self._create_job_directory(
             self._root_directory,
             self._job_name,
-            self._experiment_name,
+            self._job_sub_path,
         )
 
     def delete_job_directory(self):

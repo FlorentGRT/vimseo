@@ -288,7 +288,7 @@ def tan_model(
     r: float, theta: float, N: np.ndarray, C_strat: np.ndarray, R: float, w: float
 ) -> np.ndarray:
     """Return the stress at a given point for a given set of parameters.
-    
+
     Args:
         r: The distance from the hole center to the point where the stress is calculated.
         theta: The angle between the x-axis and the line connecting the hole center to the point where the stress is calculated.
@@ -298,12 +298,12 @@ def tan_model(
         w: The width of the plate.
     """
     # angle of the principal axis
-    a = principal_stress(N)  
+    a = principal_stress(N)
 
     M_rot = Mat_rot(a)
 
     # stress in the principal frame
-    p = np.dot(M_rot, N)  
+    p = np.dot(M_rot, N)
 
     p[2] = 0
 
@@ -316,9 +316,9 @@ def tan_model(
         M_rot,
         C_strat,
         M_rot.T,
-    ])  
+    ])
 
-    s1, s2 = Calc_S12_eff(C_pli)  
+    s1, s2 = Calc_S12_eff(C_pli)
 
     # Infinite force fluxes along direction 1 and 2
     F_ = force_fluxes(R, s1, s2, p, x, y)
@@ -412,15 +412,10 @@ def tan_model_grid(
         + 2 * np.real(s1**2 * phi1_1 + s2**2 * phi2_1)
     )
 
-    flux[1] = (
-        2 * np.real(phi1_0 + phi2_0)
-        + p[1]
-        + 2 * np.real(phi1_1 + phi2_1)
-    )
+    flux[1] = 2 * np.real(phi1_0 + phi2_0) + p[1] + 2 * np.real(phi1_1 + phi2_1)
 
-    flux[2] = (
-        -2 * np.real(s1 * phi1_0 + s2 * phi2_0)
-        - 2 * np.real(s1 * phi1_1 + s2 * phi2_1)
+    flux[2] = -2 * np.real(s1 * phi1_0 + s2 * phi2_0) - 2 * np.real(
+        s1 * phi1_1 + s2 * phi2_1
     )
 
     # Back to the global frame; solve broadcasts over the columns of ``flux``.

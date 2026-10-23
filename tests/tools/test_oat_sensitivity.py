@@ -33,6 +33,7 @@ from vimseo.tools.sensitivity.oat_sensitivity import OATSensitivityInputs
 from vimseo.tools.sensitivity.oat_sensitivity import OATSensitivitySettings
 from vimseo.tools.sensitivity.oat_sensitivity import OATSensitivityTool
 from vimseo.tools.sensitivity.oat_sensitivity_result import OATSensitivityResult
+from vimseo.utilities.test_utils import check_result_visualization
 
 CENTER = {"x1": 0.5, "x1_maximum_only": 0.5}
 
@@ -276,7 +277,7 @@ def test_serialization(oat_tool):
 
 def test_plot(oat_tool):
     """Check the tornado diagram."""
-    figures = oat_tool.plot_results(oat_tool.result, save=True, show=False)
+    figures = oat_tool.result.plot(directory_path=oat_tool.working_directory, save=True)
     assert list(figures) == ["tornado_y1"]
     assert [trace.name for trace in figures["tornado_y1"].data] == [
         "+ step",
@@ -286,6 +287,16 @@ def test_plot(oat_tool):
     assert None not in colors
     assert colors[0] != colors[1]
     assert (oat_tool.working_directory / "tornado_y1.html").is_file()
+
+
+def test_result_visualization(tmp_wd, oat_tool):
+    """Check that an OAT result can be visualized once loaded from a file."""
+    check_result_visualization(oat_tool.result, "visualization")
+    assert oat_tool.result.get_plot_choices() == {"output_names": ["y1"]}
+    tables = oat_tool.result.to_dataframes()
+    assert "indices_delta_f" in tables
+    assert "y1" in tables["indices_delta_f"].columns
+    assert "delta_f.y1.x1" in oat_tool.result.get_key_values()
 
 
 def test_variables_not_sorted(tmp_wd):
@@ -322,7 +333,7 @@ def test_plot_one_sided_and_shown(tmp_wd, parameter_space, monkeypatch):
         center=CENTER,
         two_sided=False,
     )
-    figures = tool.plot_results(tool.result)
+    figures = tool.result.plot(show=True)
     assert [trace.name for trace in figures["tornado_y1"].data] == ["+ step"]
     assert shown == [figures["tornado_y1"]]
     assert not (tool.working_directory / "tornado_y1.html").exists()

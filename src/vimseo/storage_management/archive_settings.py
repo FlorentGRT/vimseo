@@ -26,8 +26,17 @@ from vimseo.tools.base_settings import BaseSettings
 DEFAULT_ARCHIVE_ROOT = "default_archive/"
 
 
-class BaseArchiveSettings(BaseSettings):
-    """The options of the ``IntegratedModel`` constructor."""
+class ArchiveLocationSettings(BaseSettings):
+    """The location of an archive, shared by the models and the tools.
+
+    A model and a tool configured with the same values archive their results, the
+    simulations and the tool runs, in the same archive.
+    """
+
+    archive_manager: str | None = Field(
+        default=config.run_archive_manager,
+        description="The archive manager, ``DirectoryArchive`` or ``MlflowArchive``.",
+    )
 
     directory_archive_root: Path | str = Field(
         default=(
@@ -39,6 +48,22 @@ class BaseArchiveSettings(BaseSettings):
         "wherein unique directories will be created for each job to store "
         "persistent data."
         f"Default value is {DEFAULT_ARCHIVE_ROOT}.",
+    )
+
+    study_name: str = Field(
+        default=config.study_name,
+        description="The study grouping the runs in the archive: a directory "
+        "{root}/{study}/ of a DirectoryArchive, an experiment of an MlflowArchive.",
+    )
+
+
+class BaseArchiveSettings(ArchiveLocationSettings):
+    """The options of the ``IntegratedModel`` constructor."""
+
+    archive_manager: str = Field(
+        default=config.run_archive_manager,
+        description="The archive manager of the simulations, ``DirectoryArchive`` or "
+        "``MlflowArchive``.",
     )
 
     job_name: str = Field(

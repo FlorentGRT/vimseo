@@ -39,7 +39,6 @@ class DatabaseConfiguration(BaseModel):
     team_uri: str = Field(default="https://mlflow.irt-aese.local/")
     username: str = Field(default="")
     password: str = Field(default="")
-    experiment_name: str = Field(default="")
     use_insecure_tls: bool = Field(default=False)
     ssl_certificate_file: str = Field(default="")
 

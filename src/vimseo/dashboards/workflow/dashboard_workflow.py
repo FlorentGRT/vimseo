@@ -15,7 +15,6 @@
 
 from __future__ import annotations
 
-import getpass
 import json
 from copy import deepcopy
 from datetime import datetime
@@ -43,6 +42,7 @@ from vimseo.dashboards.workflow.dashboard_workflow_model import update_tool
 from vimseo.tools.io.reader_file_result import ResultFileReaderTool
 from vimseo.tools.io.reader_tools_factory import ReaderToolsFactory
 from vimseo.tools.tools_factory import AnalysisToolsFactory
+from vimseo.utilities.user import get_user_name
 from vimseo.workflow.workflow_step import Input
 from vimseo.workflow.workflow_step import Output
 
@@ -287,7 +287,7 @@ def workflow_dashboard():
 
         if st.button("Prepare input download"):
             # Download zip with input data
-            user = getpass.getuser()
+            user = get_user_name()
             datetime_ = datetime.now().strftime("%Y-%m-%d_T%H-%M-%S")
             if suffix != "":
                 suffix = f"_{suffix}"

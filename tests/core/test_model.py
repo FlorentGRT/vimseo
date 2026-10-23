@@ -214,9 +214,12 @@ def test_metadata(tmp_wd):
     assert isinstance(output_data[MetaDataNames.machine][0], np.str_)
     assert isinstance(output_data[MetaDataNames.vims_git_version][0], np.str_)
     assert isinstance(output_data[MetaDataNames.directory_archive_root][0], np.str_)
+    # The job directory is named by the run_id, in the default study.
     assert Path(output_data[MetaDataNames.directory_archive_job][0]) == Path(
-        "default_archive/MockModel/LC1/1"
+        "default_archive/default_study/MockModel/LC1",
+        output_data[MetaDataNames.run_id][0],
     )
+    assert output_data[MetaDataNames.status][0] == "FINISHED"
     assert isinstance(output_data[MetaDataNames.directory_scratch_root][0], np.str_)
     assert output_data[MetaDataNames.directory_scratch_job][0] == ""
 

@@ -20,7 +20,6 @@ import functools
 import inspect
 import json
 import logging
-import pickle
 from abc import abstractmethod
 from copy import deepcopy
 from os.path import join
@@ -37,33 +36,36 @@ from gemseo.utils.directory_creator import DirectoryNamingMethod
 from pydantic import Field
 
 from vimseo.config.global_configuration import _configuration as config
+from vimseo.core.run_context import tool_run
 from vimseo.io.io_factory import IOFactory
+from vimseo.storage_management.archive_settings import DEFAULT_ARCHIVE_ROOT
+from vimseo.storage_management.archive_settings import ArchiveLocationSettings
+from vimseo.storage_management.tool_archive import open_tool_archive
 from vimseo.tools.base_result import BaseResult
-from vimseo.tools.base_settings import BaseSettings
 from vimseo.tools.metadata import ToolResultMetadata
-from vimseo.tools.tool_results_factory import ToolResultsFactory
+from vimseo.tools.tool_results_factory import load_result_file
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
-    from collections.abc import Mapping
     from collections.abc import Sequence
 
-    from plotly.graph_objects import Figure
     from pydantic import BaseModel
 
+    from vimseo.core.run_context import ToolRunContext
     from vimseo.tools.base_settings import BaseInputs
+    from vimseo.tools.base_settings import BaseSettings
 
 LOGGER = logging.getLogger(__name__)
 
 
-class ToolConstructorSettings(BaseSettings):
+class ToolConstructorSettings(ArchiveLocationSettings):
     name: str = Field(
         default="",
         description="The name of the tool. By default, it is the class name.",
     )
     root_directory: str | Path = Field(
         default=config.root_directory,
-        description="The path to the root directory, wherein unique directories will be created at each execution. If set to empty string, use the current working directory.",
+        description="The root of the working directories of the tool runs, wherein a unique directory is created at each execution to hold the files written by the tool. If set to empty string, use the current working directory. The results are archived under ``directory_archive_root``.",
     )
     directory_naming_method: DirectoryNamingMethod = Field(
         default=DirectoryNamingMethod.NUMBERED,
@@ -71,10 +73,29 @@ class ToolConstructorSettings(BaseSettings):
     )
     working_directory: str | Path = Field(
         default=config.working_directory,
-        description="The directory within which to save the results. "
+        description="The working directory of the tool runs, where the files written by the tool are saved. "
         "If empty, save the results into the unique generated directory. "
         "Note that the use of a user-defined working_directory or an automatically generated unique directory is exclusive, "
         "and the choice is controlled by using leaving or not working_directory to its default value.",
+    )
+    archive_manager: str | None = Field(
+        default=None,
+        description="The archive manager of the tool results, which are archived "
+        "each time the tool is executed. If not set, it is the "
+        "``tool_archive_manager`` of the configuration, else its ``archive_manager``. "
+        "Use ``none`` to disable the archive.",
+    )
+    directory_archive_root: str | Path = Field(
+        default="",
+        description="The root directory of the archive of the tool results. If empty, "
+        "it is the ``local_uri`` of the database of the configuration, else "
+        "``default_archive/``.",
+    )
+    study_name: str = Field(
+        default="",
+        description="The study grouping the runs in the archive: a directory "
+        "{root}/{study}/ of a DirectoryArchive, an experiment of an MlflowArchive. "
+        "If empty, the study of the parent tool, else the one of the configuration.",
     )
 
 
@@ -103,12 +124,11 @@ class BaseTool(metaclass=GoogleDocstringInheritanceMeta):
         # Optionnaly, the current options of the tool can be saved on disk.
         >>> tool.result.save_metadata_to_disk()
         # The result saved on disk can be loaded.
-        >>> results = BaseTool.load_results(tool.working_directory /
-        >>> 'Tool_result.pickle')
-        # Then, the tool can plot the result. Note that the :meth:`plot_results` method
-        # takes the result as input. In the future, this method will be moved from the
-        # tools to a post processor class.
-        >>> tool.plot_results(results, save=True, show=False)
+        >>> result = BaseTool.load_results(tool.working_directory /
+        >>> 'MyTool_result.hdf5')
+        # Then, the result can be visualized, without the tool.
+        >>> figures = result.plot(save=True)
+        >>> tables = result.to_dataframes()
     """
 
     results: BaseResult | None
@@ -123,7 +143,6 @@ class BaseTool(metaclass=GoogleDocstringInheritanceMeta):
     _options: dict
     """The current options used to execute the tool."""
 
-    _plot_factory: str | None
     """The plot factory used to generate the plot instance."""
 
     _IS_JSON_GRAMMAR = False
@@ -142,7 +161,7 @@ class BaseTool(metaclass=GoogleDocstringInheritanceMeta):
 
     _RESULT_SUFFIX: ClassVar[str] = "_result"
 
-    _RESULT_FORMATS: ClassVar[Sequence[str]] = ["hdf5", "json", "pickle"]
+    _RESULT_FORMATS: ClassVar[Sequence[str]] = ["hdf5", "json"]
 
     _STREAMLIT_CONSTRUCTOR_OPTIONS = StreamlitToolConstructorSettings
 
@@ -152,6 +171,9 @@ class BaseTool(metaclass=GoogleDocstringInheritanceMeta):
         directory_naming_method: DirectoryNamingMethod = DirectoryNamingMethod.NUMBERED,
         working_directory: str | Path = config.working_directory,
         name: str = "",
+        archive_manager: str | None = None,
+        directory_archive_root: str | Path = "",
+        study_name: str = "",
     ):
         """
         # TODO allow passing pydantic model
@@ -167,17 +189,35 @@ class BaseTool(metaclass=GoogleDocstringInheritanceMeta):
                 is controlled by using leaving or not working_directory to its default
                 value.
             name: The name of the tool. By default, it is the class name.
+            archive_manager: The archive manager of the tool results. If not set, it
+                is the ``tool_archive_manager`` of the configuration, else its
+                ``archive_manager``. Use ``none`` to disable the archive.
+            directory_archive_root: The root directory of the archive of the tool results.
+                If empty, it is the ``local_uri`` of the database of the
+                configuration, else ``default_archive/``.
+            study_name: The study of the tool runs in the archive.
+                If empty, the study of the parent tool, else the one of the
+                configuration.
         """
         options = ToolConstructorSettings(
             root_directory=root_directory,
             directory_naming_method=directory_naming_method,
             working_directory=working_directory,
             name=name,
+            archive_manager=archive_manager,
+            directory_archive_root=directory_archive_root,
+            study_name=study_name,
         ).model_dump()
         self.name = (
             self.__class__.__name__ if options["name"] == "" else options["name"]
         )
         options = ToolConstructorSettings(**options).model_dump()
+        self._archive_manager = options["archive_manager"]
+        self._directory_archive_root = options["directory_archive_root"]
+        self._study_name = options["study_name"]
+        self._tool_archive_manager = self._open_tool_archive(
+            self._archive_manager, self._directory_archive_root, self._study_name
+        )
         self.time = datetime.datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
         self.result = BaseResult()
         self.report_name = f"{self.__class__.__name__} Report"
@@ -195,7 +235,6 @@ class BaseTool(metaclass=GoogleDocstringInheritanceMeta):
 
         self._has_check_options = self._HAS_OPTION_CHECK
         self._opt_grammar = None
-        self._plot_factory = None
 
         if self._IS_JSON_GRAMMAR:
             f_class = inspect.getfile(self.__class__)
@@ -261,17 +300,6 @@ class BaseTool(metaclass=GoogleDocstringInheritanceMeta):
         LOGGER.info(
             f"Working directory is {self.working_directory.absolute().resolve()}"
         )
-
-    def set_plot(self, class_name, **options) -> None:
-        """Set the type of plot to show the results of this tool.
-
-        Args:
-            class_name: The name of the plot class.
-            **options: The options of the plot constructor.
-        """
-        if self._plot_factory:
-            self._plot = self._plot_factory.create(class_name, **options)
-        self._plot_class = class_name
 
     def update_options(self, **options):
         self._options.update(options)
@@ -396,11 +424,109 @@ class BaseTool(metaclass=GoogleDocstringInheritanceMeta):
         def decorated(self, *args, **options):
             self._create_working_directory()
             options = self._pre_process_options(**options)
-            f(self, *args, **options)
-            self._set_options_to_results(options)
+            self._execute_and_archive(f, args, options)
             return self.result
 
         return decorated
+
+    def _execute_and_archive(self, f, args, options) -> None:
+        """Execute the tool as a tool run, and archive its result.
+
+        The tool run is started in the archive before the tool is executed, so that
+        the simulations it launches can be attached to it.
+        """
+        with tool_run(self.name) as run:
+            self._archive(
+                self._tool_archive_manager.start_tool_run,
+                self.name,
+                run.tool_run_id,
+                "" if run.parent is None else run.parent.tool_run_id,
+            )
+            try:
+                f(self, *args, **options)
+            except BaseException as error:
+                self._archive(
+                    self._tool_archive_manager.end_tool_run,
+                    self._tool_archive_manager.STATUS_FAILED,
+                    f"{type(error).__name__}: {error}",
+                )
+                raise
+        self._set_options_to_results(options)
+        self._set_run_to_results(run)
+        self._archive(self._tool_archive_manager.publish_tool_result, self.result)
+
+    def _republish_result(self) -> None:
+        """Publish again the result of the last execution in the archive.
+
+        It is meant for the tools completing their result after :meth:`execute`,
+        whose archived result would otherwise miss these completions.
+        """
+        self._archive(self._tool_archive_manager.publish_tool_result, self.result)
+
+    @staticmethod
+    def _archive(archive_method, *args) -> None:
+        """Call a method of the archive of the tool results.
+
+        An error is logged and not raised: the result of a tool, which may have taken
+        hours to compute, must not be lost because it could not be archived.
+        """
+        try:
+            archive_method(*args)
+        except Exception:
+            LOGGER.exception(
+                "The tool result could not be archived by "
+                f"{archive_method.__qualname__}."
+            )
+
+    def _inherit_archive_settings(
+        self,
+        archive_manager: str | None,
+        directory_archive_root: str | Path,
+        study_name: str = "",
+    ) -> None:
+        """Use the archive settings of the tool executing this tool.
+
+        A setting passed explicitly to this tool takes precedence over the one of the
+        executing tool.
+
+        Args:
+            archive_manager: The archive manager of the executing tool.
+            directory_archive_root: The root directory of the archive of the
+                executing tool.
+            study_name: The study of the executing tool.
+        """
+        archive_manager = self._archive_manager or archive_manager
+        directory_archive_root = self._directory_archive_root or directory_archive_root
+        study_name = self._study_name or study_name
+        if (archive_manager, directory_archive_root, study_name) == (
+            self._archive_manager,
+            self._directory_archive_root,
+            self._study_name,
+        ):
+            return
+
+        self._archive_manager = archive_manager
+        self._directory_archive_root = directory_archive_root
+        self._study_name = study_name
+        self._tool_archive_manager = self._open_tool_archive(
+            archive_manager, directory_archive_root, study_name
+        )
+
+    @staticmethod
+    def _open_tool_archive(
+        archive_manager: str | None,
+        directory_archive_root: str | Path,
+        study_name: str = "",
+    ):
+        """Open the archive of the tool results from the settings and the
+        configuration."""
+        name = (
+            archive_manager or config.tool_archive_manager or config.run_archive_manager
+        )
+        root = (
+            directory_archive_root or config.database.local_uri or DEFAULT_ARCHIVE_ROOT
+        )
+        return open_tool_archive(name, root, study_name or config.study_name)
 
     @abstractmethod
     def execute(self, *args, **options):
@@ -420,18 +546,10 @@ class BaseTool(metaclass=GoogleDocstringInheritanceMeta):
 
         Args:
             path: The path to the file.
-            tool_name: The name of the tool associated with the result under stored
-            in ``path``.
         """
-        import h5py
-
         path = Path(path)
         if path.suffix == ".hdf5":
-            class_name = ""
-            with h5py.File(path, "r") as f:
-                class_name = f.attrs["__class__"]
-            tmp_result = ToolResultsFactory().create(class_name)
-            return type(tmp_result).from_hdf5(path)
+            return load_result_file(path)
         # TODO remove support for json
         if path.suffix == ".json":
             if cls.__name__ == "BaseTool":
@@ -446,12 +564,21 @@ class BaseTool(metaclass=GoogleDocstringInheritanceMeta):
             return io.read(
                 file_name=path,
             )
-        if path.suffix == ".pickle":
-            with Path(path).open("rb") as f:
-                return pickle.load(f)
-
         msg = f"Unknow file format {path.suffix}. Supported formats are {cls._RESULT_FORMATS}"
         raise ValueError(msg)
+
+    def _set_run_to_results(self, run: ToolRunContext):
+        """Set the identifiers of the current run and of its simulations to the
+        metadata of the results."""
+        metadata = self.result.metadata
+        metadata.tool_run_id = run.tool_run_id
+        metadata.parent_tool_run_id = (
+            "" if run.parent is None else run.parent.tool_run_id
+        )
+        metadata.child_tool_run_ids = tuple(run.child_tool_run_ids)
+        metadata.simulation_run_ids = tuple(run.simulation_run_ids)
+        # The result tells its tool, e.g. to be found in a collection of results.
+        metadata.misc["tool_name"] = self.name
 
     def _set_options_to_results(self, options):
         """Set current tool options to the metadata field of the results."""
@@ -482,20 +609,37 @@ class BaseTool(metaclass=GoogleDocstringInheritanceMeta):
                 self._check_options(**loaded_options)
             self._options.update(loaded_options)
 
+    @classmethod
+    def get_result_file_name(
+        cls, tool_name: str, file_format: str = "hdf5", prefix: str = ""
+    ) -> str:
+        """Return the name of the file of a tool result.
+
+        The same name is used by :meth:`save_results` and by the archive of the tool
+        results, so that a result file tells which tool it comes from.
+
+        Args:
+            tool_name: The name of the tool.
+            file_format: The format of the file.
+            prefix: The prefix of the file name, if any.
+
+        Returns:
+            The name of the file, ``{prefix}_{tool_name}_result.{file_format}``.
+        """
+        prefix_separator = "_" if prefix != "" else ""
+        return (
+            f"{prefix}{prefix_separator}{tool_name}{cls._RESULT_SUFFIX}.{file_format}"
+        )
+
     def save_results(self, prefix: str = "", file_format="hdf5") -> None:
         """Save the results of the tool on disk. The file path is
-        `BaseTool.working_directory` / ``{filename}_result.{file_format}``.
+        `BaseTool.working_directory` / :meth:`get_result_file_name`.
 
          Args:
              prefix: The prefix of the filename result.
         """
-        prefix_separator = ""
-        if prefix != "":
-            prefix_separator = "_"
-
-        path = (
-            self.working_directory
-            / f"{prefix}{prefix_separator}{self.name}{self._RESULT_SUFFIX}.{file_format}"
+        path = self.working_directory / self.get_result_file_name(
+            self.name, file_format, prefix
         )
         LOGGER.info(f"Saving result to {path.absolute().resolve()}")
 
@@ -508,28 +652,6 @@ class BaseTool(metaclass=GoogleDocstringInheritanceMeta):
         elif file_format == "json":
             io = IOFactory().create(f"{self.name}FileIO")
             io.write(self.result, directory_path=path.parent, file_base_name=path.stem)
-        elif file_format == "pickle":
-            self.result.to_pickle(path)
-
-    # TODO Choose if it is a class method or not
-    @abstractmethod
-    def plot_results(
-        self,
-        result: BaseResult,
-        directory_path: str | Path = "",
-        save=False,
-        show=True,
-        **options,
-    ) -> Mapping[str, Figure]:
-        """Plot criteria for a given variable name.
-
-        Args:
-            result: The result of the tool.
-            directory_path: The path under which the plots are saved.
-            save: Whether to save the plot on disk.
-            show: Whether to show the plot.
-            options: The options of the plot.
-        """
 
     def _check_options(self, **options) -> None:
         """Check the options of the passed at execution of the tool. It is not

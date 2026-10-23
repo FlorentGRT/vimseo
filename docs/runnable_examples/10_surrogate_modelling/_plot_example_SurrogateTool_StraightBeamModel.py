@@ -171,17 +171,18 @@ surrogate = surrogate_results.model
 print(surrogate_tool.selected_algo)
 
 # %%
-# .. note::
-#    It is possible to redefine candidate algorithms and their options (see |gemseo|
-#    documentation for available algorithms).
+# !!! note
 #
-#    .. code::
+#     It is possible to redefine candidate algorithms and their options (see the GEMSEO
+#     documentation for available algorithms).
 #
-#        custom_candidates = {"RBFRegressor": {},
-#                             "LinearRegressor", {'fit_intercept': [True, False]},
-#                             "PolynomialRegressor", {'degree': [4, 5], 'fit_intercept': [True, False]}
-#                             }
-#        surrogate_tool.set_candidates(custom_candidates)
+#     ```python
+#     custom_candidates = {"RBFRegressor": {},
+#                          "LinearRegressor", {'fit_intercept': [True, False]},
+#                          "PolynomialRegressor", {'degree': [4, 5], 'fit_intercept': [True, False]}
+#                          }
+#     surrogate_tool.set_candidates(custom_candidates)
+#     ```
 #
 
 # %%
@@ -220,12 +221,7 @@ print(surrogate_tool.result)
 # %%
 # Predictions versus observations can be plotted:
 
-figures = surrogate_tool.plot_results(
-    surrogate_tool.result,
-    output_names=["reaction_forces"],
-    show=True,
-    save=False,
-)
+figures = surrogate_tool.result.plot(output_names=["reaction_forces"], show=True)
 
 # %%
 # The user is invited to visit the |gemseo| documentation for a complete view of the
