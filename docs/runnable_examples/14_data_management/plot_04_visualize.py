@@ -174,6 +174,5 @@ tables["outputs"]
 #
 # | Need | Command |
 # | --- | --- |
-# | Browse the model results of an archive, refined by study, model, load case, status or query | `dashboard_model_results` |
-# | Browse any tool result, e.g. a validation case, or edit a parameter space (package `vimseo-dashboards`) | `dashboard_tool_results` |
+# | Browse the model results of an archive, refined by study, model, load case, status or query, or any tool result, e.g. a validation case, or edit a parameter space (package `vimseo-dashboards`) | `dashboard_results` |
 # | Browse the model results and the tool runs of an MLflow archive | `dashboard_mlflow` |

@@ -111,10 +111,12 @@ and this project adheres to
   and `status`: a cache file written by a former version lacks them, and an execution
   served by it fails with `Missing required names`; delete such cache files (or give
   the model a new `cache_file_path`).
-- Breaking: the command `dashboard_database_viewer` is renamed `dashboard_model_results`
-  (module `vimseo.dashboards.model_results`). It lists every model result of the
-  archive, whatever its study, model and load case, and refines them by study, model,
-  load case, status and query; it no longer instantiates the models.
+- Breaking: the command `dashboard_database_viewer` is removed, as the dashboards
+  exploring results live in the package
+  [vimseo-dashboards](https://gitlab.com/gemseo/dev/vimseo-dashboards): use the page
+  **Model Results** of its command `dashboard_results`. It lists every model result of
+  the archive, whatever its study, model and load case, and refines them by study,
+  model, load case, status and query; it no longer instantiates the models.
 - `ModelResults.visualize()` warns about the figures it does not draw because some results
   do not have them.
 - With an `MlflowArchive` in `Team` mode, `directory_archive_root` is ignored, with a
@@ -158,6 +160,10 @@ and this project adheres to
 
 ## Fixed
 
+- The cache of the discipline wrapped by a `BaseDisciplineModel` (GEMSEO sets a
+  `SimpleCache` by default) is now disabled, the model managing the cache. With the
+  model cache disabled, it still answered: the discipline was not executed but the
+  model archived a new simulation.
 - The scatter matrix of a code verification, against data or against a model,
   showed the inputs only: it now shows the scalar errors versus the inputs, also when
   a single input varies. Breaking: its figure `input_scatter_matrix_{metric}` is

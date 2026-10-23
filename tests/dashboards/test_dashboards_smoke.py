@@ -34,10 +34,7 @@ ENTRY_POINTS = get_dashboard_entry_points("vimseo")
 
 
 def test_dashboards_are_discovered():
-    assert {entry_point.name for entry_point in ENTRY_POINTS} >= {
-        "dashboard_workflow",
-        "dashboard_model_results",
-    }
+    assert {entry_point.name for entry_point in ENTRY_POINTS} >= {"dashboard_workflow"}
 
 
 @pytest.mark.fast

@@ -108,7 +108,7 @@ tool_result.to_dataframes()
 # | Plot | `model_result.plot()` | `tool_result.plot()` |
 # | Tabulate | `model_result.to_dataframes()`, `model_results.to_dataset()` | `tool_result.to_dataframes()` |
 # | Explore a set | `open_model_results(**archive).filter(...).families(along=...)` | `open_tool_results(**archive).filter(...)` |
-# | Dashboards | `dashboard_model_results`, `dashboard_mlflow` | `dashboard_tool_results`, `dashboard_mlflow` |
+# | Dashboards | `dashboard_results` (`vimseo-dashboards`), `dashboard_mlflow` | `dashboard_results` (`vimseo-dashboards`), `dashboard_mlflow` |
 #
 # ``archive`` holds ``archive_manager``, ``directory_archive_root`` and
 # ``study_name``.
