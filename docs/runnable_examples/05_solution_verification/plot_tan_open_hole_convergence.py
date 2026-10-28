@@ -131,7 +131,7 @@ sigma_xx_d0_values = []
 model_results = {}
 for grid_resolution in grid_resolutions:
     output_data = model.execute({"grid_resolution": atleast_1d(grid_resolution)})
-    result = ModelResult.from_data(
+    result = ModelResult.from_dict(
         {"outputs": output_data, "inputs": model.get_input_data()},
         model=model,
         load_fields=True,
@@ -198,13 +198,13 @@ print(
 # %%
 # The convergence-fit plot shows the sampled stress, the fitted power law and the
 # converged-value estimates at a null element size:
-figures = verificator.plot_results(
-    verificator.result,
-    save=False,
-    show=True,
-    directory_path=verificator.working_directory,
-)
-figures["convergence_fit_plotter"]
+figures = verificator.result.plot(show=True)
+figures["convergence_fit"]
+
+# %%
+# The extrapolated value, the convergence order, the grid convergence indices and
+# their error bands are gathered in a table:
+verificator.result.to_dataframes()["extrapolation"]
 
 # %%
 # A sawtooth quantity
@@ -247,13 +247,8 @@ print(
 # informative: it overlays the power-law fit (with its fitted order and residual)
 # and the model-free median of the finest grids (with its uncertainty band) on
 # the sawtooth data:
-figures_peak = verificator_peak.plot_results(
-    verificator_peak.result,
-    save=False,
-    show=True,
-    directory_path=verificator_peak.working_directory,
-)
-figures_peak["convergence_fit_plotter"]
+figures_peak = verificator_peak.result.plot(show=True)
+figures_peak["convergence_fit"]
 
 # %%
 # Discussion: smooth versus sawtooth
@@ -269,8 +264,8 @@ figures_peak["convergence_fit_plotter"]
 # markedly different values, giving a wide band: the estimate depends heavily on
 # which grids are used.
 side_by_side(
-    figures["convergence_cross_validation_plotter"],
-    figures_peak["convergence_cross_validation_plotter"],
+    figures["convergence_cross_validation"],
+    figures_peak["convergence_cross_validation"],
     "smooth probe",
     "sawtooth peak",
     "sigma_xx",
@@ -284,8 +279,8 @@ side_by_side(
 # enters the asymptotic regime, so no meaningful discretization order (and hence
 # no reliable Richardson extrapolation) exists.
 side_by_side(
-    figures["relative_error_versus_element_size_plotter"],
-    figures_peak["relative_error_versus_element_size_plotter"],
+    figures["relative_error_versus_element_size"],
+    figures_peak["relative_error_versus_element_size"],
     "smooth probe",
     "sawtooth peak",
     "relative error",
@@ -336,17 +331,12 @@ for native_output in ("sigma_xx_r", "sigma_xx_d0"):
 # plots are flat, side by side (``sigma_xx_r`` on the left, ``sigma_xx_d0`` on the
 # right):
 native_figures = {
-    name: verificator.plot_results(
-        verificator.result,
-        save=False,
-        show=True,
-        directory_path=verificator.working_directory,
-    )
+    name: verificator.result.plot(show=True)
     for name, verificator in native_verificators.items()
 }
 side_by_side(
-    native_figures["sigma_xx_r"]["convergence_fit_plotter"],
-    native_figures["sigma_xx_d0"]["convergence_fit_plotter"],
+    native_figures["sigma_xx_r"]["convergence_fit"],
+    native_figures["sigma_xx_d0"]["convergence_fit"],
     "sigma_xx_r",
     "sigma_xx_d0",
     "sigma_xx",
@@ -358,8 +348,8 @@ side_by_side(
 # behaviour expected of an analytical model output, and a reassuring baseline for
 # the solution-verification workflow.
 side_by_side(
-    native_figures["sigma_xx_r"]["relative_error_versus_element_size_plotter"],
-    native_figures["sigma_xx_d0"]["relative_error_versus_element_size_plotter"],
+    native_figures["sigma_xx_r"]["relative_error_versus_element_size"],
+    native_figures["sigma_xx_d0"]["relative_error_versus_element_size"],
     "sigma_xx_r",
     "sigma_xx_d0",
     "relative error",

@@ -22,6 +22,7 @@ import numpy as np
 import pytest
 from openturns import RandomGenerator
 
+from vimseo.config.global_configuration import _configuration as config
 from vimseo.utilities.pytest_conftest import *  # ruff: ignore[unused-import, undefined-local-with-import-star]
 from vimseo.utilities.pytest_conftest import (
     pytest_sessionfinish as _fortran_sessionfinish,
@@ -97,3 +98,16 @@ def reset_random_seeds():
     """
     RandomGenerator.SetSeed(0)
     np.random.seed(0)  # ruff: ignore[numpy-legacy-random]
+
+@pytest.fixture(autouse=True)
+def no_tool_archive():
+    """Disable the archive of the tool results, so that a test does not write into the
+    directory it runs in.
+
+    A test of the archive enables it by passing ``archive_manager`` to the tool,
+    which takes precedence over the configuration.
+    """
+    previous = config.tool_archive_manager
+    config.tool_archive_manager = "none"
+    yield
+    config.tool_archive_manager = previous

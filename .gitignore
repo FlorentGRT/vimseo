@@ -1,15 +1,16 @@
 .tox
 /.pytest_cache/
 __pycache__/
+*.pyc
 /htmlcov
 /sandbox
 /build
 /dist
-__pycache__/
-
 /src/vimseo.egg-info
+coverage.xml
+.coverage*
+!.coveragerc
 
-*.pyc
 /.project
 /.pydevproject
 /.settings
@@ -19,23 +20,35 @@ __pycache__/
 /.ipynb_checkpoints
 /tags
 
+# The documentation
 /docs/generated/
+/docs/images/*.pptx
+/site
+/docvimseo
+
+# The outputs of the runnable examples
+/docs/runnable_examples/model_runs/
+/docs/runnable_examples/**/default_archive/
+/docs/runnable_examples/**/default_scratch/
+/docs/runnable_examples/**/doe_tool_results/
 /docs/runnable_examples/**/*.png
 /docs/runnable_examples/**/*.html
 /docs/runnable_examples/**/*.pickle
 /docs/runnable_examples/**/*.hdf5
 /docs/runnable_examples/**/*.hdf
-/docs/runnable_examples/**/*.hdf5
 /docs/runnable_examples/**/results.json
-/docs/runnable_examples/model_runs
-/docs/images/*.pptx
-/docs/runnable_examples/model_runs
-/model_runs
-/site
-/docvimseo
+# The data written by the examples, next to their input data which are tracked.
+/docs/runnable_examples/06_validation_point/reference_validation_bending_test_cantilever.csv
+/docs/runnable_examples/06_validation_point/simulated_input_space*
+/docs/runnable_examples/07_validation_case/dataset_validation_beam_cantilever.csv
+/docs/runnable_examples/07_validation_case/dataframe_validation_beam_cantilever.csv
+/docs/runnable_examples/07_validation_case/reference_validation_bending_test_cantilever_*.csv
 
-coverage.xml
-.coverage*
-!.coveragerc
-
-/.pytest_cache
+# The outputs of the models and the tools executed from the root of the repository
+/default_archive/
+/default_scratch/
+/mlruns/
+/model_runs/
+/visualization/
+/*_cache.hdf
+/*Tool/

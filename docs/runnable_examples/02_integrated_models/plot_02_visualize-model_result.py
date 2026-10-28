@@ -70,7 +70,7 @@ model = create_model(
 )
 model.cache = None
 model.execute()
-result = ModelResult.from_data({
+result = ModelResult.from_dict({
     "inputs": model.get_input_data(),
     "outputs": model.get_output_data(),
 })
@@ -97,7 +97,7 @@ model.archive_manager.job_directory
 
 # %%
 # A result can be retrieved from this path:
-result = ModelResult.from_data(
+result = ModelResult.from_dict(
     model.archive_manager.get_result(model.archive_manager.job_directory)
 )
 print(result)
@@ -108,7 +108,7 @@ print(result)
 # %%
 # Two model results can be compared. We first generate a second result:
 model.execute({"young_modulus": atleast_1d(1.95e5), "imposed_dplt": atleast_1d(-10.0)})
-result_2 = ModelResult.from_data({
+result_2 = ModelResult.from_dict({
     "inputs": model.get_input_data(),
     "outputs": model.get_output_data(),
 })
@@ -118,8 +118,8 @@ result_2
 # The scalars can be compared in a scatter matrix:
 variable_names = ["young_modulus", "reaction_forces"]
 df = DataFrame([
-    result.get_numeric_scalars(variable_names=variable_names),
-    result_2.get_numeric_scalars(variable_names=variable_names),
+    result.scalars(variable_names),
+    result_2.scalars(variable_names),
 ])
 df["color"] = range(len(df))
 plot = ScatterMatrix(Dataset.from_dataframe(df), classifier="color")
@@ -131,7 +131,7 @@ fig = plot.execute(
 fig
 
 # %%
-# .. note::
+# !!! note
 #
 #     Since the compared data are in a ``Pandas.DataFrame``,
 #     other plotting library can be used, like ``Seaborn``:
@@ -141,8 +141,8 @@ fig
 # The curves can also be compared:
 superpose_curves(
     [
-        result.get_curve(("dplt_grid", "dplt")),
-        result_2.get_curve(("dplt_grid", "dplt")),
+        result.curves["dplt_vs_dplt_grid"],
+        result_2.curves["dplt_vs_dplt_grid"],
     ],
     labels=["result", "result 2"],
 )
@@ -162,7 +162,7 @@ variable_names = list(df.columns.values)
 df = concat(
     [
         df,
-        DataFrame([result.get_numeric_scalars(variable_names=variable_names)]),
+        DataFrame([result.scalars(variable_names)]),
     ],
     ignore_index=True,
 )
@@ -221,7 +221,7 @@ field_output = field_model.execute()
 # %%
 # The field is retrieved by rebuilding a ``ModelResult`` with ``load_fields=True``.
 # ``result.fields`` maps each field name to a list of ``MeshField`` objects:
-field_result = ModelResult.from_data(
+field_result = ModelResult.from_dict(
     {"inputs": field_model.get_input_data(), "outputs": field_output},
     model=field_model,
     load_fields=True,
@@ -353,7 +353,7 @@ fig
 # colour and legend entry. Away from the hole both profiles relax to the applied
 # far-field stress (~1000 MPa); they differ around the concentration:
 field_output_ud = field_model.execute({"layup": atleast_1d([0.0] * 8)})
-flux_field_ud = ModelResult.from_data(
+flux_field_ud = ModelResult.from_dict(
     {"inputs": field_model.get_input_data(), "outputs": field_output_ud},
     model=field_model,
     load_fields=True,
@@ -395,8 +395,7 @@ for spec in multi_curve_model.plots:
     print(f"{spec.get_name()}: {[trace.get_label() for trace in spec.traces]}")
 
 # %%
-# Comparing variables within a result
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ### Comparing variables within a result
 # Several ordinates sharing an abscissa are drawn on a single figure. Here the
 # three energies are declared as a ``Plot`` object without any custom style, so the
 # colours are taken from the default palette. Since the axis holds several lines, it
@@ -419,7 +418,7 @@ multi_figs["crack_propagation"]
 # The figures of a result are available as ``ModelResult.plots``, which groups the
 # curves per figure, while ``ModelResult.curves`` remains the flat list of all of
 # them:
-multi_result = ModelResult.from_data(
+multi_result = ModelResult.from_dict(
     {
         "inputs": multi_curve_model.get_input_data(),
         "outputs": multi_curve_model.get_output_data(),
@@ -434,11 +433,10 @@ superpose_curves(
 )
 
 # %%
-# Comparing a variable across results
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ### Comparing a variable across results
 # A second result is generated with a larger imposed displacement:
 multi_curve_model.execute({"max_displacement": atleast_1d(15.0)})
-multi_result_2 = ModelResult.from_data(
+multi_result_2 = ModelResult.from_dict(
     {
         "inputs": multi_curve_model.get_input_data(),
         "outputs": multi_curve_model.get_output_data(),
@@ -449,11 +447,11 @@ multi_result_2 = ModelResult.from_data(
 # %%
 # The same curve coming from both results is superposed, each one identified by
 # its label:
-curve_name = ("displacement_history", "force_history")
+curve_name = "force_history_vs_displacement_history"
 superpose_curves(
     [
-        multi_result.get_curve(curve_name),
-        multi_result_2.get_curve(curve_name),
+        multi_result.curves[curve_name],
+        multi_result_2.curves[curve_name],
     ],
     labels=["result", "result 2"],
     show=True,

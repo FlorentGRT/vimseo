@@ -18,6 +18,7 @@ from __future__ import annotations
 import pytest
 from gemseo.datasets.dataset import Dataset
 from gemseo.datasets.io_dataset import IODataset
+from openturns import RandomGenerator
 
 from vimseo.tools.base_result import assert_results_equal
 from vimseo.tools.statistics.statistics_result import StatisticsResult
@@ -27,10 +28,16 @@ from vimseo.tools.statistics.statistics_tool import StatisticsTool
 from vimseo.tools.statistics.statistics_tool import compute_ecdf
 from vimseo.utilities.datasets import DatasetAddFromStatistics
 from vimseo.utilities.distribution import DistributionParameters
+from vimseo.utilities.test_utils import check_result_visualization
 
 
 def test_fitting_default_options(tmp_wd):
     """Check that a uniform distribution is correctly inferred with default options."""
+    # The samples are drawn by the global random generator of OpenTURNS: without a
+    # seed, they depend on the tests executed before in the same process. With 100
+    # samples, the minimum is above -0.475 in 8% of the draws, i.e. out of the
+    # tolerance below; the seed makes the test reproducible.
+    RandomGenerator.SetSeed(0)  # ruff: ignore[numpy-legacy-random]
     distribution_name = "Uniform"
     lower = -0.5
     upper = 0.5
@@ -71,8 +78,8 @@ def test_save_and_load_pickle(tmp_wd):
         inputs=StatisticsInputs(dataset=dataset),
         settings=StatisticsSettings(tested_distributions=[distribution_name]),
     )
-    tool.plot_results(result, save=True, show=False, variable="x")
-    assert (tool.working_directory / "x_Uniform_criteria.png").is_file()
+    result.plot(directory_path=tool.working_directory, save=True, variable_names=["x"])
+    assert (tool.working_directory / "criteria_x.png").is_file()
 
 
 def test_from_uniform_sample(tmp_wd):
@@ -103,3 +110,23 @@ def test_compute_ecdf():
     ecdf = compute_ecdf(dataset, prefix="p")
     assert "p_x_x" in ecdf.variable_names
     assert "p_x_y" in ecdf.variable_names
+
+
+def test_result_visualization(tmp_wd):
+    """Check that a statistics result can be visualized once loaded from a file."""
+    dataset = Dataset()
+    DatasetAddFromStatistics().add_group(
+        dataset,
+        IODataset.INPUT_GROUP,
+        ["x"],
+        {"x": DistributionParameters(name="Uniform", lower=-0.5, upper=0.5)},
+        100,
+    )
+    result = StatisticsTool().execute(
+        inputs=StatisticsInputs(dataset=dataset),
+        settings=StatisticsSettings(tested_distributions=["Uniform"]),
+    )
+    check_result_visualization(result, "visualization")
+    tables = result.to_dataframes()
+    assert "x" in tables["statistics"].index
+    assert "mean" in tables["statistics"].columns

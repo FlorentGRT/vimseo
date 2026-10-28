@@ -34,7 +34,7 @@ cachetools==6.2.6
     #   mlflow-skinny
     #   mlflow-tracing
     #   streamlit
-certifi==2026.7.22
+certifi==2026.10.19
     # via requests
 cffi==2.1.1
     # via cryptography
@@ -67,7 +67,7 @@ cycler==0.12.1
     # via matplotlib
 cyclopts==5.2.0
     # via pyvista
-databricks-sdk==0.152.0
+databricks-sdk==0.155.0
     # via
     #   mlflow-skinny
     #   mlflow-tracing
@@ -89,7 +89,7 @@ et-xmlfile==2.0.0
     # via openpyxl
 executing==2.3.0
     # via stack-data
-fastapi==0.143.0
+fastapi==0.156.8
     # via mlflow-skinny
 fastjsonschema==2.21.2
     # via
@@ -103,7 +103,7 @@ flask==3.1.3
     #   mlflow
 flask-cors==6.0.5
     # via mlflow
-fonttools==4.66.1
+fonttools==4.67.0
     # via matplotlib
 gemseo==6.3.3
     # via
@@ -119,7 +119,7 @@ ghp-import==2.1.0
     #   properdocs
 gitdb==4.0.12
     # via gitpython
-gitpython==3.2.0
+gitpython==3.2.1
     # via
     #   mlflow-skinny
     #   streamlit
@@ -139,7 +139,7 @@ griffe-fieldz==0.5.0
     # via vimseo (pyproject.toml:doc)
 griffe-inherited-docstrings==1.1.4
     # via vimseo (pyproject.toml:doc)
-griffelib==2.3.2
+griffelib==2.4.0
     # via
     #   griffe-fieldz
     #   griffe-inherited-docstrings
@@ -157,7 +157,7 @@ idna==3.20
     #   requests
 importlib-metadata==8.9.0
     # via mlflow-skinny
-inversion==1.0.0
+inversion==1.0.1
     # via verspec
 ipython==9.17.1
     # via vimseo (pyproject.toml:doc)
@@ -194,13 +194,15 @@ jsonschema-specifications==2025.9.1
     # via jsonschema
 jupyter-core==5.9.1
     # via nbformat
+kaleido==0.2.1
+    # via vimseo (pyproject.toml)
 kiwisolver==1.5.1
     # via matplotlib
 latexcodec==3.0.1
     # via pybtex
 mako==1.4.3
     # via alembic
-markdown==3.11
+markdown==3.11.2
     # via
     #   mkdocs
     #   mkdocs-autorefs
@@ -208,7 +210,7 @@ markdown==3.11
     #   mkdocstrings
     #   properdocs
     #   pymdown-extensions
-markdown-exec==1.12.4
+markdown-exec==1.12.5
     # via vimseo (pyproject.toml:doc)
 markdown-it-py==4.2.0
     # via rich
@@ -288,11 +290,11 @@ mkdocs-section-index==0.3.12
     # via vimseo (pyproject.toml:doc)
 mkdocs-table-reader-plugin==4.0.2
     # via vimseo (pyproject.toml:doc)
-mkdocstrings==1.0.7
+mkdocstrings==1.0.8
     # via
     #   vimseo (pyproject.toml:doc)
     #   mkdocstrings-python
-mkdocstrings-python==2.0.9
+mkdocstrings-python==2.0.10
     # via mkdocstrings
 ml-dtypes==0.6.0
     # via
@@ -414,7 +416,7 @@ pillow==11.3.0
     #   matplotlib
     #   pyvista
     #   streamlit
-platformdirs==4.13.0
+platformdirs==4.13.5
     # via
     #   black
     #   jupyter-core
@@ -495,7 +497,7 @@ pygments==2.21.0
     #   rich-rst
 pygments-ansi-color==0.3.0
     # via markdown-exec
-pymdown-extensions==12.2
+pymdown-extensions==12.3
     # via
     #   markdown-exec
     #   mkdocs-material
@@ -589,7 +591,7 @@ scipy==1.15.2
     #   statsmodels
 scooby==0.12.0
     # via pyvista
-setuptools==84.0.0
+setuptools==84.2.1
     # via mkdocs-bibtex
 six==1.17.0
     # via python-dateutil
@@ -597,7 +599,7 @@ smmap==5.0.3
     # via gitdb
 spgl1==0.0.3
     # via gemseo
-sqlalchemy==2.1.4
+sqlalchemy==2.1.5
     # via
     #   alembic
     #   mlflow
@@ -605,7 +607,7 @@ sqlparse==0.6.0
     # via mlflow-skinny
 stack-data==0.6.3
     # via ipython
-starlette==1.8.0
+starlette==1.9.0
     # via fastapi
 statsmodels==0.14.5
     # via vimseo (pyproject.toml)
@@ -683,7 +685,7 @@ uvicorn==0.54.0
     # via mlflow-skinny
 validators==0.36.0
     # via mkdocs-bibtex
-verspec==0.2.0
+verspec==0.2.1
     # via mike
 vtk==9.7.1
     # via pyvista
@@ -694,7 +696,7 @@ watchdog==6.0.0
     #   streamlit
 wcmatch==11.1
     # via mkdocs-include-markdown-plugin
-wcwidth==0.9.2
+wcwidth==0.9.3
     # via
     #   prettytable
     #   prompt-toolkit

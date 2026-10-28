@@ -70,6 +70,7 @@ class PostProcessor(ExternalSoftwareComponent):
         check_subprocess: bool = False,
     ) -> None:
         super().__init__(load_case, material_grammar_file, material, check_subprocess)
+        self.forbid_extra_output_names = check_subprocess
 
         self._output_physical_var_names = set(self.output_grammar.names) - {
             self._ERROR_CODE_NAME

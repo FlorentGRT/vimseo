@@ -15,7 +15,6 @@
 
 from __future__ import annotations
 
-import getpass
 import logging
 import socket
 import subprocess
@@ -25,7 +24,6 @@ from copy import copy
 from copy import deepcopy
 from dataclasses import asdict
 from datetime import datetime
-from os import getlogin
 from pathlib import Path
 from re import match
 from subprocess import CalledProcessError
@@ -34,6 +32,7 @@ from typing import TYPE_CHECKING
 from typing import ClassVar
 
 import numpy as np
+from gemseo import READ_ONLY_EMPTY_DICT
 from gemseo.caches.simple_cache import SimpleCache
 from gemseo.core.chains.chain import MDOChain
 from gemseo.core.discipline.base_discipline import CacheType
@@ -57,14 +56,19 @@ from vimseo.core.model_metadata import DEFAULT_METADATA
 from vimseo.core.model_metadata import MetaData
 from vimseo.core.model_metadata import MetaDataNames
 from vimseo.core.model_settings import IntegratedModelSettings
+from vimseo.core.run_context import current_tool_run
+from vimseo.core.run_context import new_run_id
+from vimseo.core.run_context import record_simulation_from_outputs
 from vimseo.material.material import Material
 from vimseo.material.material_registry import resolve_material
 from vimseo.storage_management import get_archive_class
+from vimseo.storage_management import run_kind
 from vimseo.storage_management.scratch_storage import DirectoryScratch
 from vimseo.tools.post_tools.plot_parameters import Plot
 from vimseo.tools.post_tools.plot_parameters import merge_plots
 from vimseo.utilities.json_grammar_utils import load_input_bounds
 from vimseo.utilities.plotting_utils import superpose_curves
+from vimseo.utilities.user import get_user_name
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -72,6 +76,8 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from gemseo.caches.hdf5_cache import HDF5Cache
+    from gemseo.core.discipline.discipline_data import DisciplineData
+    from gemseo.typing import StrKeyMapping
     from plotly.graph_objs import Figure
 
     from vimseo.core.components.external_software_component import BaseComponent
@@ -315,6 +321,9 @@ class IntegratedModel(GemseoDisciplineWrapper):
 
         self._run_time = np.nan
 
+        self._run_id = ""
+        self._tool_run_id = ""
+
         self._datetime = datetime.today()
 
         self._chain = MDOChain(components)
@@ -333,6 +342,7 @@ class IntegratedModel(GemseoDisciplineWrapper):
             "load_case_name": self._load_case.name,
             "root_directory": Path(options["directory_archive_root"]),
             "job_name": self._job_name,
+            "study_name": options["study_name"],
             "persistent_file_names": [
                 names
                 for c in self._chain.disciplines
@@ -543,8 +553,23 @@ class IntegratedModel(GemseoDisciplineWrapper):
 
         return dataflow
 
+    def execute(
+        self,
+        input_data: StrKeyMapping = READ_ONLY_EMPTY_DICT,
+    ) -> DisciplineData:
+        output_data = super().execute(input_data)
+        # Done here and not in ``_run``, which is skipped when the outputs are
+        # retrieved from the cache: the simulation is used by the tool all the same.
+        record_simulation_from_outputs(output_data)
+        return output_data
+
     def _run(self, input_data):
         start_time = time()
+
+        # A new identifier for each simulation really run (not the cached ones).
+        self._run_id = new_run_id()
+        tool_run = current_tool_run()
+        self._tool_run_id = "" if tool_run is None else tool_run.tool_run_id
 
         if self._whether_use_scratch_dir():
             self._scratch_manager.create_job_directory()
@@ -552,7 +577,19 @@ class IntegratedModel(GemseoDisciplineWrapper):
                 f"Current scratch directory is {self._scratch_manager._job_directory}."
             )
 
-        self._archive_manager.create_job_directory()
+        self._archive_manager.create_job_directory(
+            self._run_id,
+            input_data,
+            {
+                MetaDataNames.model: self.__class__.__name__,
+                MetaDataNames.load_case: self._load_case.name,
+                MetaDataNames.job_name: self._job_name,
+                MetaDataNames.date: datetime.today().isoformat(" "),
+                MetaDataNames.run_id: self._run_id,
+                MetaDataNames.tool_run_id: self._tool_run_id,
+                MetaDataNames.study_name: self._archive_manager.study_name,
+            },
+        )
         LOGGER.info(
             f"Current archive directory is {self._archive_manager._job_directory}."
         )
@@ -560,15 +597,19 @@ class IntegratedModel(GemseoDisciplineWrapper):
         for discipline in self._chain.disciplines:
             discipline._job_directory = self._scratch_manager.job_directory
 
-        self._chain.execute(input_data)
-        output_data = self._chain.get_output_data()
+        try:
+            self._chain.execute(input_data)
+            output_data = self._chain.get_output_data()
 
-        end_time = time()
-        self._run_time = end_time - start_time
+            end_time = time()
+            self._run_time = end_time - start_time
 
-        # Collect field files, generate metadata and write the archive (results
-        # + persistent files); then enforce the scratch-persistency policy.
-        self.archive_outputs(output_data)
+            # Collect field files, generate metadata and write the archive (results
+            # + persistent files); then enforce the scratch-persistency policy.
+            self.archive_outputs(output_data)
+        except BaseException:
+            self._archive_manager.abort_job()
+            raise
         self._manage_persistency(output_data)
 
         return output_data
@@ -634,10 +675,10 @@ class IntegratedModel(GemseoDisciplineWrapper):
         """
         return merge_plots(self.PLOTS, self._load_case.PLOTS)
 
-    def _plot_curves(self, figures, result, directory_path, save, show):
+    def _plot_curves(self, figures, result, directory_path, save, show, prefix=""):
         for curve_set in result.plots:
             spec = curve_set.spec
-            file_name = f"{self.name}_{self._load_case.name}_{spec.get_file_name()}"
+            file_name = f"{prefix}{spec.get_file_name()}"
             figures[spec.get_name()] = superpose_curves(
                 curve_set,
                 directory_path=directory_path,
@@ -659,8 +700,11 @@ class IntegratedModel(GemseoDisciplineWrapper):
         """Plots the results, from the definition of the figures in the PLOTS variable.
 
         Args:
-            directory_path: A path where to save the plots. Default is current working
-                directory.
+            directory_path: A path where to save the plots, in files prefixed by the
+                names of the model and of the load case. If empty, the job directory
+                of the simulation in the archive, where the files are not prefixed
+                (the path already names the model and the load case), else the
+                current working directory.
             save: Whether to save the plot.
             show: Whether to show the plot.
             scalar_names: The scalars to plot in a scatter matrix. Show all scalars by default.
@@ -670,6 +714,13 @@ class IntegratedModel(GemseoDisciplineWrapper):
         Returns:
             The figures, indexed by their name.
         """
+        # The job directory already names the model and the load case: a prefix
+        # would only lengthen paths, which are limited to 260 characters on Windows.
+        prefix = (
+            f"{self.name}_{self._load_case.name}_"
+            if directory_path != "" or not self.archive_manager.job_directory
+            else ""
+        )
         if save:
             directory_path = (
                 Path(directory_path)
@@ -684,21 +735,19 @@ class IntegratedModel(GemseoDisciplineWrapper):
 
         from vimseo.core.model_result import ModelResult
 
-        result = ModelResult.from_data(
+        result = ModelResult.from_dict(
             {"inputs": self.get_input_data(), "outputs": self.get_output_data()},
             model=self,
         )
         figures = {}
         if data == "PLOTS":
-            figures = self._plot_curves(figures, result, directory_path, save, show)
+            figures = self._plot_curves(
+                figures, result, directory_path, save, show, prefix
+            )
         elif data == "SCALARS":
             plot = ScatterMatrix(
                 Dataset.from_dataframe(
-                    DataFrame.from_dict([
-                        result.get_numeric_scalars(
-                            variable_names=scalar_names,
-                        )
-                    ])
+                    DataFrame.from_dict([result.scalars(variable_names=scalar_names)])
                 )
             )
             figures["scalars"] = plot.execute(
@@ -846,10 +895,7 @@ class IntegratedModel(GemseoDisciplineWrapper):
                 "Model metadata: git is not available, git commit cannot be determined."
             )
             vims_git_version = ""
-        if sys.platform.startswith("win"):
-            user = getlogin()
-        else:
-            user = getpass.getuser()
+        user = get_user_name()
         return MetaData(**{
             MetaDataNames.model: array([self.__class__.__name__]),
             MetaDataNames.load_case: array([self._load_case.name]),
@@ -884,6 +930,10 @@ class IntegratedModel(GemseoDisciplineWrapper):
             MetaDataNames.directory_scratch_job: array([
                 str(self._scratch_manager.job_directory)
             ]),
+            MetaDataNames.run_id: array([self._run_id]),
+            MetaDataNames.tool_run_id: array([self._tool_run_id]),
+            MetaDataNames.study_name: array([self._archive_manager.study_name]),
+            MetaDataNames.status: array([run_kind.FINISHED]),
         })
 
     def create_cache_from_archive(

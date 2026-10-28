@@ -6,6 +6,11 @@ repo_name: vimseo
 # Uncomment for static build (mkdocs build)
 # use_directory_urls: false
 
+# The archives, scratch and caches written by the examples are not part of the site;
+# copying them also exceeds the Windows path length limit.
+exclude_docs: |
+  /runnable_examples/model_runs/
+
 theme:
   name: material
   favicon: images/favicon.ico
@@ -79,8 +84,6 @@ plugins:
     bib_file: "docs/references.bib"
 - mike:
     canonical_version: latest
-    # Gitlab pages expects the docs in this directory.
-    deploy_prefix: public
 - table-reader
 - autorefs
 
@@ -92,6 +95,7 @@ nav:
   - Licenses: licenses.md
 - User Guide:
   - Installation for developers: user_guide/developer_information.md
+  - Information for maintainers: user_guide/maintainer_information.md
   - Command line interface: user_guide/cli.md
 - How-to guides:
   - Runnable examples:
@@ -106,6 +110,7 @@ nav:
     - Build and select a surrogate model: generated/runnable_examples/10_surrogate_modelling
     - Propagate uncertainties through a model: generated/runnable_examples/11_uncertainty_quantification
     - Use Bayesian inference to estimate the probability distribution of samples: generated/runnable_examples/12_bayesian_calibration
+    - Manage the results: generated/runnable_examples/14_data_management
   - Run a study: how_to/run_a_study.md
   - Integrate new models: how_to/model_integration.md
   - Define a Space of Parameters: how_to/parameter_space/parameter_space.md
@@ -122,6 +127,7 @@ nav:
    - Integrated Model:
      - Component based Model: references/component_based_model.md
    - Solution Verification: references/solution_verification/solution_verification_method.md
+   - Calibration: references/calibration.md
    - State of the Art: references/state_of_the_art.md
    - Acronyms: references/acronyms.md
 - Tutorials:
@@ -132,6 +138,18 @@ nav:
     - Conference abstracts:
         - ASME 2025: explanations/asme2025/abstract.md
         - ECCOMAS 2024: explanations/eccomas2024/abstract.md
+- Requirements:
+    - Overview: requirements/index.md
+    - Models: requirements/REQ-MOD.md
+    - Tools: requirements/REQ-TOOL.md
+    - Results: requirements/REQ-RES.md
+    - Storage and traceability: requirements/REQ-STO.md
+    - Serialization: requirements/REQ-SER.md
+    - Deployment: requirements/REQ-DEP.md
+    - Workflows: requirements/REQ-WF.md
+    - User interfaces: requirements/REQ-UX.md
+    - Non-functional: requirements/REQ-NFR.md
+    - Specifications (SPDD): specs/index.md
 
 markdown_extensions:
 - admonition
@@ -164,3 +182,4 @@ watch:
 extra:
   version:
     provider: mike
+    alias: true

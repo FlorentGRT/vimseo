@@ -30,6 +30,9 @@ LOGGER = logging.getLogger(__name__)
 
 ENV_PREFIX = "VIMSEO_"
 
+DEFAULT_STUDY_NAME = "default_study"
+"""The default study, distinct from the MLflow experiment ``Default``."""
+
 
 class VimseoSettings(
     BaseConfiguration,
@@ -68,8 +71,22 @@ class VimseoSettings(
         "results are exported under this path.",
     )
 
-    archive_manager: str = Field(
-        default="DirectoryArchive", description="The archive manager"
+    run_archive_manager: str = Field(
+        default="DirectoryArchive",
+        description="The archive manager of the simulations.",
+    )
+
+    tool_archive_manager: str | None = Field(
+        default=None,
+        description="The archive manager of the results of the tools. If not set, it "
+        "is the ``run_archive_manager``. Set it to ``none`` to disable the archive of "
+        "the tool results.",
+    )
+
+    study_name: str = Field(
+        default=DEFAULT_STUDY_NAME,
+        description="The study in which the simulations and the tool runs are "
+        "archived.",
     )
 
     database: DatabaseConfiguration = Field(

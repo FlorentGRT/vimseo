@@ -20,7 +20,6 @@ from pathlib import Path
 from pydantic import ConfigDict
 from pydantic import Field
 
-from vimseo.config.global_configuration import _configuration as config
 from vimseo.storage_management.archive_settings import BaseArchiveSettings
 from vimseo.storage_management.scratch_settings import DirectoryScratchSettings
 
@@ -37,5 +36,3 @@ class IntegratedModelSettings(BaseArchiveSettings, DirectoryScratchSettings):
     )
 
     cache_file_path: str | Path = ""
-
-    archive_manager: str = config.archive_manager

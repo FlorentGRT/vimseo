@@ -83,7 +83,7 @@ def test_tan_oh(tmp_wd, stacking, expected_sigma_xx_d0):
     output_data = model.execute({"layup": stacking})
     input_data = model.get_input_data()
     thickness = input_data["thickness"][0]
-    model_result = ModelResult.from_data(
+    model_result = ModelResult.from_dict(
         {"outputs": output_data, "inputs": input_data}, load_fields=True
     )
 
@@ -181,7 +181,7 @@ def test_criterion_field_is_blanked_inside_the_ignored_zone(tmp_wd):
     model = create_model("TanOpenHole", "Tension")
     output_data = model.execute()
     input_data = model.get_input_data()
-    model_result = ModelResult.from_data(
+    model_result = ModelResult.from_dict(
         {"outputs": output_data, "inputs": input_data}, model=model, load_fields=True
     )
     criterion_field = model_result.fields["criterion"][0]

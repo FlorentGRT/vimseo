@@ -100,13 +100,11 @@ model = create_model(
 
 # %%
 # Then, a step of calibration is defined.
-# It uses the :class:``SBPISE`` metric, which computes the area
-# between the reference and the simulated curves.
-# The curves are scaled to zero-mean and unitary standard deviation
-# by setting the argument ``scaling`` to ``CurveScaling.XYRange``,
-# which is mandatory when calibrating for:
-#  - several metrics in the same step
-#  - several load cases in the same step
+# It uses the :class:``SBPISE`` metric, which integrates the squared difference
+# between the reference and the simulated curves,
+# here scaled by setting the argument ``scaling`` to ``CurveScaling.XYRange``.
+# See [Calibration: metrics and optimizer settings](../../../references/calibration.md)
+# for the definition of the metrics and how to choose the optimizer settings.
 output_name = "y_history"
 step = CalibrationStep(working_directory="curves")
 step.execute(
@@ -139,8 +137,8 @@ step.result.prior_parameters
 
 # %%
 # The outputs can be compared to the reference data, before and after calibration:
-figs = step.plot_results(step.result, show=True, save=False)
-figs["Dummy"]["simulated_versus_reference_curve_y_history_versus_x_history"]
+figs = step.result.plot(show=True)
+figs["Dummy_simulated_versus_reference_curve_y_history_versus_x_history"]
 
 # %%
 # The curves that have been defined as ``control_outputs`` can be retrieved as
