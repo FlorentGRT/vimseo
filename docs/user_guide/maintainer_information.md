@@ -9,6 +9,79 @@
 
 # Information for maintainers
 
+In the commands below, `upstream` is the remote of
+[vimseo/vimseo](https://github.com/vimseo/vimseo) and `X.Y.Z` the version to release,
+which follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## Release a version
+
+The version of the package is computed by `setuptools_scm` from the git tags: a
+release is a tag `X.Y.Z` on `main`, and nothing else in the code holds the version.
+
+### Prepare the release
+
+1. Create a branch `release/X.Y.Z` from `upstream/main`.
+2. In `CHANGELOG.md`, rename the section `# Unreleased` to
+   `# Version X.Y.Z (MM/DD/YYYY)`, with the date of the release, and review its
+   entries. Commit with the message `docs(changelog): release X.Y.Z`.
+3. Open a pull request to `main`, titled `docs(changelog): release X.Y.Z`, and merge
+   it once the tests pass.
+
+### Tag the release
+
+Tag the merge commit with an annotated tag, and push it:
+
+```bash
+git fetch upstream
+git tag -a X.Y.Z -m "vimseo X.Y.Z" upstream/main
+git push upstream X.Y.Z
+```
+
+### Publish on PyPI
+
+Build the distribution from a clean checkout of the tag: `setuptools_scm` gives a
+development version (e.g. `X.Y.(Z+1).dev0+g<sha>.d<date>`) to a checkout which is not
+exactly on the tag or which has modified files.
+
+```bash
+git worktree add --detach ../vimseo-release X.Y.Z
+cd ../vimseo-release
+tox -e dist
+```
+
+`tox -e dist` builds the source distribution and the wheel in `dist/` and checks the
+content of the wheel. Check that their names hold `X.Y.Z`, then upload them with a
+[PyPI API token](https://pypi.org/help/#apitoken) of the project:
+
+```bash
+export UV_PUBLISH_TOKEN=pypi-...
+tox -e dist-upload
+```
+
+Then check the published package: `tox -e pypi-py312` installs `vimseo[all]` from
+PyPI and runs the tests of the checkout against it.
+
+### Publish the GitHub release
+
+Create the release `vimseo X.Y.Z` from the tag, with the section `X.Y.Z` of the
+changelog as notes, for instance with the
+[GitHub CLI](https://cli.github.com/), from a file holding this section:
+
+```bash
+gh release create X.Y.Z -R vimseo/vimseo --title "vimseo X.Y.Z" --notes-file notes.md
+```
+
+### Deploy the documentation of the release
+
+Deploy the documentation of the tag as the latest version, from the same checkout, as
+described in [Deploy the documentation](#deploy-the-documentation):
+
+```bash
+mike deploy --push --remote upstream --update-aliases X.Y.Z latest
+```
+
+Finally, remove the worktree with `git worktree remove ../vimseo-release`.
+
 ## Deploy the documentation
 
 The documentation is published on GitHub Pages, from the `gh-pages` branch of
@@ -34,9 +107,8 @@ documentation point to `latest`.
 
 ### Deploy a version
 
-From the root of the checkout of the revision to document (here the tag `0.1.8`,
-created by `git worktree add --detach ../vimseo-doc 0.1.8`), with `upstream` the remote
-of [vimseo/vimseo](https://github.com/vimseo/vimseo):
+From the root of the checkout of the revision to document, e.g. the tag `X.Y.Z`
+created by `git worktree add --detach ../vimseo-release X.Y.Z`:
 
 ```bash
 git fetch upstream gh-pages:gh-pages
@@ -50,7 +122,7 @@ rm -rf docs/generated site
 python docs/modify_readme_image_url.py
 
 # A release, which becomes the latest one:
-mike deploy --push --remote upstream --update-aliases 0.1.8 latest
+mike deploy --push --remote upstream --update-aliases X.Y.Z latest
 # The main branch:
 mike deploy --push --remote upstream develop
 ```
