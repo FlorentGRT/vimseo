@@ -95,6 +95,7 @@ nav:
   - Licenses: licenses.md
 - User Guide:
   - Installation for developers: user_guide/developer_information.md
+  - Information for maintainers: user_guide/maintainer_information.md
   - Command line interface: user_guide/cli.md
 - How-to guides:
   - Runnable examples:
