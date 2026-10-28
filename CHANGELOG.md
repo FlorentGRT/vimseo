@@ -161,6 +161,10 @@ and this project adheres to
   are drawn by `SensitivityResult.plot()`, and the tornado diagrams of a star OAT
   analysis by `OATSensitivityResult.plot()`, which also gives its plot choices,
   its tables of indices and its key values.
+- The documentation is versioned: each release is published under its version
+  (`https://vimseo.github.io/vimseo/0.1.7/`), the last one also under `latest`, and
+  `main` under `develop`. The links of the README to the documentation point to
+  `latest`; the deep links to the unversioned documentation are broken.
 
 ## Fixed
 
