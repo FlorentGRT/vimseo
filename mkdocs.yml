@@ -84,8 +84,6 @@ plugins:
     bib_file: "docs/references.bib"
 - mike:
     canonical_version: latest
-    # Gitlab pages expects the docs in this directory.
-    deploy_prefix: public
 - table-reader
 - autorefs
 
@@ -183,3 +181,4 @@ watch:
 extra:
   version:
     provider: mike
+    alias: true

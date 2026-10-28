@@ -15,7 +15,7 @@
 <div align="center">
 <h3>
     <a href="https://vimseo.github.io/vimseo/">documentation</a> |
-    <a href="https://vimseo.github.io/vimseo/generated/runnable_examples/02_integrated_models">examples</a>
+    <a href="https://vimseo.github.io/vimseo/latest/generated/runnable_examples/02_integrated_models">examples</a>
 </h3>
 </div>
 </div>
@@ -294,14 +294,14 @@ information on the calibrated quantities and versatile calibration metrics takin
 
 ## Using **VIMSEO**
 
-- **[References](https://vimseo.github.io/vimseo/generated/runnable_examples/01_models/)
-and [API](https://vimseo.github.io/vimseo/reference/vimseo/)**: get the description and definition of concepts and API.
-- **[How-to](https://vimseo.github.io/vimseo/generated/runnable_examples/02_integrated_models/)**: solve practical problems by exploring runnable examples and how-to.
+- **[References](https://vimseo.github.io/vimseo/latest/generated/runnable_examples/01_models/)
+and [API](https://vimseo.github.io/vimseo/latest/reference/vimseo/)**: get the description and definition of concepts and API.
+- **[How-to](https://vimseo.github.io/vimseo/latest/generated/runnable_examples/02_integrated_models/)**: solve practical problems by exploring runnable examples and how-to.
 
 ## Learning **VIMSEO**
 
-- **[Tutorials](https://vimseo.github.io/vimseo/tutorials/vvuq_study/introduction/)
-and [Explanations](https://vimseo.github.io/vimseo/explanations/asme2025/abstract/)**:
+- **[Tutorials](https://vimseo.github.io/vimseo/latest/tutorials/vvuq_study/introduction/)
+and [Explanations](https://vimseo.github.io/vimseo/latest/explanations/asme2025/abstract/)**:
 learn through discussions and tutorials about key topics.
 
 ## Roadmap
@@ -366,7 +366,7 @@ to submit bugs or questions.
 
 ## Contributing
 
-Refer to our contribution guide here: [Contributing](https://vimseo.github.io/vimseo/contributing/)
+Refer to our contribution guide here: [Contributing](https://vimseo.github.io/vimseo/latest/contributing/)
 
 ## Contributors
 
