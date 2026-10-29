@@ -22,12 +22,10 @@ from typing import ClassVar
 
 import matplotlib.pyplot as plt
 from numpy import array
-from numpy import atleast_1d
 from numpy import interp
 from numpy import linspace
 from numpy import nan
 
-from vimseo.core.base_integrated_model import IntegratedModel
 from vimseo.core.components.external_software_component import ExternalSoftwareComponent
 from vimseo.core.model_metadata import MetaDataNames
 
@@ -80,13 +78,8 @@ class PostProcessor(ExternalSoftwareComponent):
         self.forbid_extra_output_names = check_subprocess
 
         self._output_physical_var_names = set(self.output_grammar.names) - {
-            self._ERROR_CODE_NAME
+            MetaDataNames.error_code.value
         }
-        self.output_grammar.update_from_data({
-            MetaDataNames.error_code.name: atleast_1d(
-                IntegratedModel._ERROR_CODE_DEFAULT
-            )
-        })
 
     def _run(self, input_data):
         if self._is_run_faulty(input_data) and not self.POSTPROCESS_DESPITE_FAULTY_RUN:
@@ -107,10 +100,11 @@ class PostProcessor(ExternalSoftwareComponent):
     def _is_run_faulty(self, input_data) -> bool:
         """Whether the RUN stage reported an error.
 
-        How the RUN stage reports an error is solver-specific: the base implementation
-        assumes it succeeded, solver-specific subclasses should override this method.
+        Base implementation reads the upstream error code, a positive one reporting an
+        error. Subclasses may override this method when the RUN stage reports its errors
+        otherwise.
         """
-        return False
+        return self._get_upstream_error_code(input_data) > 0
 
     def _can_postprocess(self) -> bool:
         """Whether the job directory contains what postprocessing needs (e.g. a

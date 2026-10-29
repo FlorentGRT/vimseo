@@ -154,3 +154,38 @@ def test_faulty_run_with_opt_in_but_unusable_job_directory_returns_nan_outputs(
     assert output_data[MetaDataNames.error_code][0] == 1
     assert np.isnan(output_data["y1"]).all()
     assert np.isnan(output_data["y2"]).all()
+
+
+class _FakePostProcessorAfterRun(PostProcessor):
+    """A minimal PostProcessor relying on the default ``_is_run_faulty``."""
+
+    auto_detect_grammar_files = False
+
+    def __init__(self, **options) -> None:
+        super().__init__(**options)
+        self.output_grammar.update_from_data({"y1": array([0.0])})
+
+    def _postprocess(self, input_data):
+        return {"y1": array([1.0]), "error_code": array([0])}
+
+
+@pytest.mark.parametrize(
+    ("upstream_error_code", "is_run_faulty"),
+    [(None, False), (0, False), (-1, False), (1, True)],
+)
+def test_faulty_run_is_read_from_upstream_error_code(
+    tmp_wd, upstream_error_code, is_run_faulty
+):
+    """By default, the RUN stage is faulty when the upstream error code is positive,
+    -1 meaning that no upstream component reported an error code."""
+    post = _FakePostProcessorAfterRun()
+    input_data = (
+        {}
+        if upstream_error_code is None
+        else {"error_code": array([upstream_error_code])}
+    )
+
+    output_data = post.execute(input_data)
+
+    assert output_data["error_code"][0] == int(is_run_faulty)
+    assert bool(np.isnan(output_data["y1"][0])) is is_run_faulty

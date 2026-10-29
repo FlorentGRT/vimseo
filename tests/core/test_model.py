@@ -67,21 +67,21 @@ def test_check_data_flow(tmp_wd):
                 "x1",
                 "x1_minimum_only",
                 "x1_no_bounds",
+                "error_code",
             ],
             "outputs": ["x2", "error_code"],
         },
         "MockRun": {
-            "inputs": [
-                "x2",
-            ],
+            "inputs": ["x2", "error_code"],
             "outputs": ["y0", "error_code"],
         },
         "MockPost_LC1": {
-            "inputs": ["y0"],
+            "inputs": ["y0", "error_code"],
             "outputs": ["y1", "error_code"],
         },
     }
-    # Every component declares an optional error code.
+    # Every component declares an optional error code, as input and output, but the
+    # error code is not an input of the model.
 
     for io_key in ["model_inputs", "model_outputs"]:
         assert set(expected[io_key]) == set(model.get_dataflow()[io_key])

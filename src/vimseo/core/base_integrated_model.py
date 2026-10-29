@@ -328,6 +328,18 @@ class IntegratedModel(GemseoDisciplineWrapper):
 
         self._chain = MDOChain(components)
 
+        # The error code of the model is the one returned by the chain of components,
+        # so the last component must be able to return it.
+        last_component = self._chain.disciplines[-1]
+        if MetaDataNames.error_code.value not in last_component.output_grammar:
+            msg = (
+                f"The last component {last_component.name} of {self.name} does not "
+                f"declare the output '{MetaDataNames.error_code.value}', so the model "
+                f"could not report its error code. Derive this component from "
+                f"BaseComponent."
+            )
+            raise TypeError(msg)
+
         self._scratch_manager = DirectoryScratch(
             root_directory=Path(options["directory_scratch_root"]),
             persistency=options["directory_scratch_persistency"],
@@ -371,6 +383,10 @@ class IntegratedModel(GemseoDisciplineWrapper):
         self._chain.output_grammar.restrict_to(chain_output_names)
 
         self.input_grammar = deepcopy(self._chain.input_grammar)
+        # The components read the error code of the upstream ones; it is an output of
+        # the model, not an input.
+        if MetaDataNames.error_code.value in self.input_grammar:
+            del self.input_grammar[MetaDataNames.error_code.value]
         self.default_input_data = self._chain.default_input_data
         for name in self.input_grammar.names:
             self.input_grammar.required_names.add(name)
@@ -440,6 +456,8 @@ class IntegratedModel(GemseoDisciplineWrapper):
                 self.lower_bounds[name] = [-inf]
                 self.upper_bounds[name] = [inf]
                 self.input_space[name] = [-inf, inf]
+        for bounds in (self.lower_bounds, self.upper_bounds, self.input_space):
+            bounds.pop(MetaDataNames.error_code.value, None)
 
         # Set status to DONE, to avoid being locked in FAILED mode.
         self.execution_status.value = ExecutionStatus.Status.DONE

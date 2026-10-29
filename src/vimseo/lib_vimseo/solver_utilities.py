@@ -12,14 +12,21 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program; if not, write to the Free Software Foundation,
 # Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
-"""Utility functions for solver interaction."""
+"""Utility functions for solver interaction.
+
+This module is also copied to the job directories, and imported by the solver scripts
+run by the Python interpreter of the solver (e.g. Python 2 for Abaqus 2022). So it must
+not import VIMSEO, which is not available there, but only the standard library and
+NumPy.
+"""
 
 import datetime
+import getpass
 import json
+import os
 import numpy as np
 from numpy import array
 from numpy import ndarray
-from vimseo.utilities.user import get_user_name
 
 # Python 2/3 compatibility
 try:
@@ -318,8 +325,21 @@ def time_stamper_formatted():
     return time_stamper_full_text().replace(":", "-").replace(" ", "_")
 
 
+def _get_user_name():
+    """Return the name of the current user, or ``"unknown"`` if it cannot be found.
+
+    Same as ``vimseo.utilities.user.get_user_name``, which cannot be imported here.
+    """
+    for getter in (getpass.getuser, os.getlogin):
+        try:
+            return getter()
+        except (ImportError, KeyError, OSError):
+            continue
+    return "unknown"
+
+
 def get_metadata_txt():
     """Generate metadata as string (time stamp + user)."""
     return (
-        "## Generated the " + time_stamper_full_text() + "   by  " + get_user_name()
+        "## Generated the " + time_stamper_full_text() + "   by  " + _get_user_name()
     )

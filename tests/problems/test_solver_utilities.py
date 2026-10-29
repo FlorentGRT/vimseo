@@ -15,7 +15,10 @@
 
 from __future__ import annotations
 
+import ast
 import re
+import sys
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -23,6 +26,22 @@ from numpy import linspace
 from numpy import power
 
 import vimseo.lib_vimseo.solver_utilities as base_utils
+
+
+@pytest.mark.fast
+def test_imports_only_standard_library_and_numpy():
+    """The module is also imported by the solver scripts, run by the Python
+    interpreter of the solver, where VIMSEO is not available."""
+    tree = ast.parse(Path(base_utils.__file__).read_text())
+    imported_names = {
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Import)
+        for alias in node.names
+    } | {node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)}
+
+    top_level_names = {name.split(".")[0] for name in imported_names}
+    assert top_level_names - sys.stdlib_module_names <= {"numpy"}
 
 
 @pytest.mark.fast
