@@ -122,7 +122,7 @@ and this project adheres to
   the model a new `cache_file_path`).
 - Breaking: the command `dashboard_database_viewer` is removed, as the dashboards
   exploring results live in the package
-  [vimseo-dashboards](https://gitlab.com/gemseo/dev/vimseo-dashboards): use the page
+  [vimseo-dashboards](https://forge-is.pf.irt-saintexupery.com/vims/vimseo-dashboards): use the page
   **Model Results** of its command `dashboard_results`. It lists every model result of
   the archive, whatever its study, model and load case, and refines them by study,
   model, load case, status and query; it no longer instantiates the models.
