@@ -383,8 +383,9 @@ class IntegratedModel(GemseoDisciplineWrapper):
         self._chain.output_grammar.restrict_to(chain_output_names)
 
         self.input_grammar = deepcopy(self._chain.input_grammar)
-        # The components read the error code of the upstream ones; it is an output of
-        # the model, not an input.
+        # Every component declares the upstream error code as an optional input;
+        # nothing upstream of the first one produces it, so the chain exposes it as
+        # an input. It is an output of the model, not an input.
         if MetaDataNames.error_code.value in self.input_grammar:
             del self.input_grammar[MetaDataNames.error_code.value]
         self.default_input_data = self._chain.default_input_data
@@ -456,8 +457,6 @@ class IntegratedModel(GemseoDisciplineWrapper):
                 self.lower_bounds[name] = [-inf]
                 self.upper_bounds[name] = [inf]
                 self.input_space[name] = [-inf, inf]
-        for bounds in (self.lower_bounds, self.upper_bounds, self.input_space):
-            bounds.pop(MetaDataNames.error_code.value, None)
 
         # Set status to DONE, to avoid being locked in FAILED mode.
         self.execution_status.value = ExecutionStatus.Status.DONE
